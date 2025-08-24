@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\buildMultiTargeting\ZapAgenda-api-aspnet.props" />
+</Project>

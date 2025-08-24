@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "3Qf8ojdpC+t7zH6I8Oo/pDvpofNKI3DX+tfmuKirz+Q=",
+  "Source": "ZapAgenda-api-aspnet",
+  "BasePath": "_content/ZapAgenda-api-aspnet",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}

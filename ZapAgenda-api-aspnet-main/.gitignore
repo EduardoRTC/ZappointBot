@@ -1,0 +1,6 @@
+.env
+..dockerignore
+Dockerfile
+bin/Release/
+docker-compose.yml
+ obj/Release/
