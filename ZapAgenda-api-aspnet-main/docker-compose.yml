@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   db:
     image: mysql:8.0
@@ -27,6 +26,10 @@ services:
     environment:
       DEFAULT_CONNECTION_STRING: "Server=db;Port=3306;Database=zapagenda;User=root;Password=root;AllowPublicKeyRetrieval=True;SslMode=None"
       ASPNETCORE_ENVIRONMENT: Development
+      JWT__Issuer: http://localhost:8080
+      JWT__Audience: http://localhost:8080
+      JWT__Key: super-long-random-secret-at-least-32-chars
+      SIGNINGKEY: "uma-chave-bem-grande-com-mais-de-32-caracteres"
 
 volumes:
   db-data:

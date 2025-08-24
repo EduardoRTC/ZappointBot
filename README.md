@@ -7,3 +7,4 @@
 3. A API estará disponível em `http://localhost:8080`.
 
 O serviço de banco de dados é inicializado antes da API, evitando erros de conexão.
+a
