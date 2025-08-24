@@ -1,5 +1,13 @@
-bin/
-obj/
+bin
+obj
+.vscode
 .git
 .gitignore
-docker-compose.yml
+Dockerfile
+docker-compose*.yml
+*.user
+*.suo
+*.swp
+*.log
+.env
+**/*.Development.json

@@ -1,3 +1,5 @@
 .env
-bin/
-obj/
+..dockerignore
+Dockerfile
+bin/Release/
+ obj/Release/
