@@ -1,0 +1,32 @@
+version: '3.9'
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: zapagenda
+    ports:
+      - "3306:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DEFAULT_CONNECTION_STRING: "Server=db;Port=3306;Database=zapagenda;User=root;Password=root;AllowPublicKeyRetrieval=True;SslMode=None"
+      ASPNETCORE_ENVIRONMENT: Development
+
+volumes:
+  db-data:
