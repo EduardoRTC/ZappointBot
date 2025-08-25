@@ -1,10 +1,13 @@
 const axios = require('axios');
 const { apiBaseUrl } = require('../config');
-const { menuText, serviceText } = require('../utils/messages');
+const { menuText, serviceText, startText } = require('../utils/messages');
 
 module.exports = {
   mainMenu: async (session, msg, text) => {
-    if (text === '1') {
+    if (text === '0' || text.toLowerCase() === 'voltar') {
+      session.step = 'start';
+      await msg.reply(startText());
+    } else if (text === '1') {
       session.step = 'service';
       await msg.reply(serviceText());
     } else if (text === '2') {
@@ -19,6 +22,7 @@ module.exports = {
         session.appointments.forEach((a, i) => {
           textList += `${i + 1} - ${a.service} com ${a.professionalName} em ${a.date} às ${a.time}\n`;
         });
+        textList += '0 - Voltar';
         await msg.reply(textList.trim());
       }
     } else if (text === '3') {
@@ -33,6 +37,7 @@ module.exports = {
         session.appointments.forEach((a, i) => {
           textList += `${i + 1} - ${a.service} com ${a.professionalName} em ${a.date} às ${a.time}\n`;
         });
+        textList += '0 - Voltar';
         await msg.reply(textList.trim());
       }
     } else if (text === '4') {
@@ -54,6 +59,11 @@ module.exports = {
   },
 
   confirmExisting: async (session, msg, text) => {
+    if (text === '0' || text.toLowerCase() === 'voltar') {
+      session.step = 'mainMenu';
+      await msg.reply(menuText());
+      return;
+    }
     const cIdx = parseInt(text) - 1;
     if (isNaN(cIdx) || cIdx < 0 || cIdx >= session.appointments.length) {
       await msg.reply('Opção inválida.');
@@ -67,6 +77,11 @@ module.exports = {
   },
 
   cancelExisting: async (session, msg, text) => {
+    if (text === '0' || text.toLowerCase() === 'voltar') {
+      session.step = 'mainMenu';
+      await msg.reply(menuText());
+      return;
+    }
     const xIdx = parseInt(text) - 1;
     if (isNaN(xIdx) || xIdx < 0 || xIdx >= session.appointments.length) {
       await msg.reply('Opção inválida.');

@@ -1,14 +1,43 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { allowedNumbers } = require('./config');
-const registration = require('./flows/registration');
-const menu = require('./flows/menu');
-const appointment = require('./flows/appointment');
+const {
+  start,
+  awaitExistingCPF,
+  awaitCPF,
+  awaitName
+} = require('./flows/registration');
+const {
+  mainMenu,
+  confirmExisting,
+  cancelExisting
+} = require('./flows/menu');
+const {
+  service,
+  professional,
+  date,
+  time,
+  confirmAppointment
+} = require('./flows/appointment');
+const { startText } = require('./utils/messages');
 
 const client = new Client({ authStrategy: new LocalAuth() });
 
 const sessions = {};
-const handlers = { ...registration, ...menu, ...appointment };
+const handlers = {
+  start,
+  awaitExistingCPF,
+  awaitCPF,
+  awaitName,
+  mainMenu,
+  confirmExisting,
+  cancelExisting,
+  service,
+  professional,
+  date,
+  time,
+  confirmAppointment
+};
 
 client.on('qr', qr => {
   qrcode.generate(qr, { small: true });
@@ -32,7 +61,7 @@ client.on('message', async msg => {
 
   if (!sessions[chatId]) {
     sessions[chatId] = { step: 'start' };
-    await msg.reply('Seja bem-vindo(a), esse número ainda não possui cadastro, você já é cliente?\n1 - Sim\n2 - Não');
+    await msg.reply(startText());
     return;
   }
 
