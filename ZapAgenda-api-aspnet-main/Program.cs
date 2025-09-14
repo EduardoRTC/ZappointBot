@@ -26,7 +26,10 @@ builder.Services.AddCors(options =>
                .AllowAnyHeader());
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddNewtonsoftJson(options =>
+{
+    options.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
+});
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(c =>
@@ -58,11 +61,6 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-builder.Services.AddControllers().AddNewtonsoftJson(options =>
-{
-    options.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
-});
-
 builder.Services.AddDbContext<CoreDBContext>(options =>
 {
     options.UseMySql(Environment.GetEnvironmentVariable("DEFAULT_CONNECTION_STRING"), new MySqlServerVersion(new Version(8, 0, 32)));
@@ -83,10 +81,6 @@ builder.Services.AddScoped<IAgendamentoRepository, AgendamentoRepository>();
 
 var app = builder.Build();
 
-app.UseCors("AllowMyOrigin");
-
-app.UseMiddleware<CustomExceptionMiddleware>();
-
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -98,10 +92,11 @@ else
     app.UseHttpsRedirection();
 }
 
+app.UseRouting();
+app.UseCors("AllowMyOrigin");
+app.UseMiddleware<CustomExceptionMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
-
-
 
 app.MapControllers();
 
