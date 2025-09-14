@@ -27,6 +27,11 @@ function sanitizeCPF(text) {
 function normalizeClient(data) {
   if (!data) return null;
   if (Array.isArray(data)) return data[0] || null;
+  if (typeof data === 'object' && 'value' in data) {
+    const v = data.value;
+    if (Array.isArray(v)) return v[0] || null;
+    return v;
+  }
   return data;
 }
 

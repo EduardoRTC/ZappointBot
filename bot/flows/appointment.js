@@ -31,7 +31,11 @@ function normalizeList(maybeList) {
     try { maybeList = JSON.parse(maybeList); } catch { return []; }
   }
   if (Array.isArray(maybeList)) return maybeList;
-  if (maybeList && typeof maybeList === 'object') return Object.values(maybeList);
+  if (maybeList && typeof maybeList === 'object') {
+    if ('value' in maybeList) return normalizeList(maybeList.value);
+    if ('data' in maybeList) return normalizeList(maybeList.data);
+    return Object.values(maybeList);
+  }
   return [];
 }
 
@@ -271,9 +275,23 @@ module.exports = {
         return;
       }
 
-      const idCliente = session.client?.id ?? session.client?.IdCliente ?? session.client?.Id;
-      const idUsuario = session.professional?.id ?? session.professional?.IdUsuario ?? session.professional?.Id;
-      const idServico = session.service?.id ?? session.service?.IdServico ?? session.service?.Id;
+      const idCliente =
+        session.client?.id ??
+        session.client?.idCliente ??
+        session.client?.IdCliente ??
+        session.client?.Id;
+
+      const idUsuario =
+        session.professional?.id ??
+        session.professional?.idUsuario ??
+        session.professional?.IdUsuario ??
+        session.professional?.Id;
+
+      const idServico =
+        session.service?.id ??
+        session.service?.idServico ??
+        session.service?.IdServico ??
+        session.service?.Id;
 
       if (!idCliente || !idUsuario || !idServico) {
         console.error('[appointment.confirm] missing ids', { idCliente, idUsuario, idServico });
