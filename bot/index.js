@@ -48,13 +48,16 @@ client.on('ready', () => {
 });
 
 client.on('message', async msg => {
+  const sender = (msg.author || msg.from).split('@')[0];
   if (msg.from.endsWith('@g.us')) {
+    console.log(`Mensagem de ${sender} enviada de um grupo IGNORADA`);
     return;
   }
-  const sender = msg.from.split('@')[0];
   if (!allowedNumbers.includes(sender)) {
+    console.log(`Mensagem de numero ${sender} IGNORADA Não é whitelisted`);
     return;
   }
+  console.log(`Mensagem de numero ${sender} permitido`);
 
   const chatId = msg.from;
   const text = msg.body.trim();
