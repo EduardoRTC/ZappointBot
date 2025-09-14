@@ -29,9 +29,9 @@ module.exports = {
     }
     session.cpf = text.replace(/\D/g, '');
     try {
-      const resp = await axios.post(
-        `${apiBaseUrl}/${companyId}/cliente/buscar`,
-        { cpf: session.cpf }
+      const resp = await axios.get(
+        `${apiBaseUrl}/${companyId}/cliente`,
+        { params: { cpf: session.cpf } }
       );
       if (resp.data && resp.data.length > 0) {
         session.client = resp.data[0];
@@ -68,9 +68,9 @@ module.exports = {
     const [firstName, ...rest] = text.split(' ');
     const lastName = rest.join(' ');
     try {
-      const existing = await axios.post(
-        `${apiBaseUrl}/${companyId}/cliente/buscar`,
-        { cpf: session.cpf }
+      const existing = await axios.get(
+        `${apiBaseUrl}/${companyId}/cliente`,
+        { params: { cpf: session.cpf } }
       );
       if (!existing.data || existing.data.length === 0) {
         const phone = msg.from.split('@')[0];
