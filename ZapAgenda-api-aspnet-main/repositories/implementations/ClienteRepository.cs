@@ -1,5 +1,6 @@
 using FluentResults;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 using ZapAgenda_api_aspnet.data;
 using ZapAgenda_api_aspnet.Dtos.Cliente;
 using ZapAgenda_api_aspnet.helpers;
@@ -24,17 +25,20 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
         }
         public async Task<Result<Cliente>> CreateAsync(Cliente cliente, Guid IdEmpresa)
         {
-            var IsCpf = VerificaDados.VerificaCpf(cliente.Cpf);
+            var cpfLimpo = new string(cliente.Cpf.Where(char.IsDigit).ToArray());
+            var IsCpf = VerificaDados.VerificaCpf(cpfLimpo);
             if (IsCpf.IsFailed)
             {
                 return Result.Fail(IsCpf.Errors);
             }
 
             var clientes = await GetAllPorEmpresaAsync(IdEmpresa);
-            if (clientes.FirstOrDefault(c => c.Cpf == cliente.Cpf) != null)
+            if (clientes.Any(c => c.Cpf == cpfLimpo))
             {
                 return Result.Fail("Já existe Cliente com o mesmo cpf");
             }
+
+            cliente.Cpf = cpfLimpo;
             cliente.IdEmpresa = IdEmpresa;
 
             await _context.Cliente.AddAsync(cliente);
@@ -85,7 +89,14 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
 
         public async Task<Result<Cliente>> GetByCpfAsync(string cpf, Guid IdEmpresa)
         {
-            var cliente = await _context.Cliente.FirstOrDefaultAsync(c => c.Cpf == cpf && c.IdEmpresa == IdEmpresa);
+            var cpfLimpo = new string(cpf.Where(char.IsDigit).ToArray());
+            var cpfValido = VerificaDados.VerificaCpf(cpfLimpo);
+            if (cpfValido.IsFailed)
+            {
+                return Result.Fail(cpfValido.Errors);
+            }
+
+            var cliente = await _context.Cliente.FirstOrDefaultAsync(c => c.Cpf == cpfLimpo && c.IdEmpresa == IdEmpresa);
             if (cliente == null)
             {
                 return Result.Fail($"Não existe cliente de cpf: {cpf}");
