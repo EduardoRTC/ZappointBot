@@ -5,7 +5,8 @@ using ZapAgenda_api_aspnet.repositories.interfaces;
 
 namespace ZapAgenda_api_aspnet.controllers
 {
-    [Route("{IdEmpresa}/cliente")]
+    [Route("{IdEmpresa:guid}/cliente")]
+    [ApiController]
     public class ClienteController : ControllerBase
     {
         private readonly IClienteRepository _clienteRepo;
@@ -18,7 +19,7 @@ namespace ZapAgenda_api_aspnet.controllers
 
 
         [HttpGet]
-        public async Task<IActionResult> Get([FromQuery] string? cpf, Guid IdEmpresa)
+        public async Task<IActionResult> Get([FromQuery] string? cpf, [FromRoute] Guid IdEmpresa)
         {
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
             if (empresa.IsFailed)
@@ -35,7 +36,7 @@ namespace ZapAgenda_api_aspnet.controllers
             var cliente = await _clienteRepo.GetByCpfAsync(cpf, IdEmpresa);
             if (cliente.IsFailed)
             {
-                return BadRequest(cliente.Errors);
+                return NotFound(cliente.Errors);
             }
 
             return Ok(new[] { cliente.Value });
@@ -43,7 +44,7 @@ namespace ZapAgenda_api_aspnet.controllers
 
 
         [HttpGet("{idCliente}")]
-        public async Task<IActionResult> GetById([FromRoute] int idCliente, Guid IdEmpresa)
+        public async Task<IActionResult> GetById([FromRoute] int idCliente, [FromRoute] Guid IdEmpresa)
         {
 
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
@@ -66,7 +67,7 @@ namespace ZapAgenda_api_aspnet.controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateClienteDto createClienteDto, Guid IdEmpresa)
+        public async Task<IActionResult> Create([FromBody] CreateClienteDto createClienteDto, [FromRoute] Guid IdEmpresa)
         {
             if (!ModelState.IsValid) { return BadRequest(ModelState); }
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
@@ -84,7 +85,7 @@ namespace ZapAgenda_api_aspnet.controllers
         }
 
         [HttpPut("{IdCliente}")]
-        public async Task<IActionResult> Update([FromBody] UpdateClienteDto updateClienteDto, [FromRoute] int IdCliente, Guid IdEmpresa)
+        public async Task<IActionResult> Update([FromBody] UpdateClienteDto updateClienteDto, [FromRoute] int IdCliente, [FromRoute] Guid IdEmpresa)
         {
             if (!ModelState.IsValid)
             {

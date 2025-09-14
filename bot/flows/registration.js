@@ -39,9 +39,9 @@ async function findClientByCPF(cpf) {
     return normalizeClient(resp.data);
   } catch (e) {
     const status = e?.response?.status;
-    // Seu controller retorna BadRequest (400) quando GetByCpfAsync falha — tratamos como "não achou".
-    if (status === 400) return null;
-    // 404 aqui indica empresa inválida (IdEmpresa não existe).
+    // Alguns backends retornam 400 quando o CPF não existe.
+    // 404 indica cliente inexistente ou empresa inválida.
+    if (status === 400 || status === 404) return null;
     throw e;
   }
 }
