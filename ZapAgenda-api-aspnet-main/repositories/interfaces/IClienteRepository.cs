@@ -10,6 +10,7 @@ namespace ZapAgenda_api_aspnet.repositories.interfaces
         Task<Result<Cliente>> CreateAsync(Cliente cliente, Guid IdEmpresa);
         Task<List<ClienteDto>>? GetAllPorEmpresaAsync(Guid IdEmpresa);
         Task<Result<Cliente>> GetById(int IdCliente, Guid Idempresa);
+        Task<Result<Cliente>> GetByCpfAsync(string cpf, Guid IdEmpresa);
         Task<Result<Cliente>> UpdateAsync(UpdateClienteDto updateClienteDto, int IdCliente, Guid IdEmpresa);
     }
 }
