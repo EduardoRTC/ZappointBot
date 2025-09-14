@@ -1,8 +1,19 @@
+const GUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+const {
+  API_BASE_URL = 'http://localhost:8080',
+  COMPANY_ID: RAW_COMPANY_ID,
+  ALLOWED_NUMBERS = ''
+} = process.env;
+
+const COMPANY_ID = (RAW_COMPANY_ID || '').trim();
+if (!COMPANY_ID || COMPANY_ID === '00000000-0000-0000-0000-000000000000' || !GUID_REGEX.test(COMPANY_ID)) {
+  throw new Error('COMPANY_ID inválido');
+}
+
 module.exports = {
-  apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:8080',
-  companyId: process.env.COMPANY_ID || '00000000-0000-0000-0000-000000000000',
-  // Update with the phone numbers (digits only) that the bot should respond to
-  allowedNumbers: [
-    process.env.ALLOWED_NUMBER || '554598406778'
-  ]
+  apiBaseUrl: API_BASE_URL,
+  companyId: COMPANY_ID,
+  // Accept comma-separated list of numbers
+  allowedNumbers: ALLOWED_NUMBERS.split(',').map(n => n.trim()).filter(Boolean)
 };
