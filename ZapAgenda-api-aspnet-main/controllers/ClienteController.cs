@@ -5,102 +5,88 @@ using ZapAgenda_api_aspnet.repositories.interfaces;
 
 namespace ZapAgenda_api_aspnet.controllers
 {
-    [Route("{IdEmpresa}/cliente")]
+    [ApiController]
+    [Route("{IdEmpresa:guid}/cliente")]
     public class ClienteController : ControllerBase
     {
         private readonly IClienteRepository _clienteRepo;
         private readonly IEmpresaRepository _empresaRepo;
+
         public ClienteController(IClienteRepository clienteRepo, IEmpresaRepository empresaRepo)
         {
             _clienteRepo = clienteRepo;
             _empresaRepo = empresaRepo;
         }
 
-
+        // Lista todos os clientes da empresa
         [HttpGet]
-        public async Task<IActionResult> Get([FromQuery] string? cpf, Guid IdEmpresa)
+        public async Task<IActionResult> GetAll([FromRoute] Guid IdEmpresa)
         {
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
-            if (empresa.IsFailed)
-            {
-                return NotFound(empresa.Errors);
-            }
+            if (empresa.IsFailed) return NotFound(empresa.Errors);
 
+            var clientes = await _clienteRepo.GetAllPorEmpresaAsync(IdEmpresa);
+            return Ok(clientes);
+        }
+
+        // Consulta por CPF (rota dedicada)
+        [HttpGet("by-cpf")]
+        public async Task<IActionResult> GetByCpf([FromQuery] string cpf, [FromRoute] Guid IdEmpresa)
+        {
             if (string.IsNullOrWhiteSpace(cpf))
-            {
-                var clientes = await _clienteRepo.GetAllPorEmpresaAsync(IdEmpresa);
-                return Ok(clientes);
-            }
+                return BadRequest("CPF obrigatório.");
+
+            var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
+            if (empresa.IsFailed) return NotFound(empresa.Errors);
 
             var cliente = await _clienteRepo.GetByCpfAsync(cpf, IdEmpresa);
-            if (cliente.IsFailed)
-            {
-                return BadRequest(cliente.Errors);
-            }
+            if (cliente.IsFailed) return BadRequest(cliente.Errors);
 
             return Ok(new[] { cliente.Value });
         }
 
-
-        [HttpGet("{idCliente}")]
-        public async Task<IActionResult> GetById([FromRoute] int idCliente, Guid IdEmpresa)
+        // Busca por ID
+        [HttpGet("{idCliente:int}")]
+        public async Task<IActionResult> GetById([FromRoute] int idCliente, [FromRoute] Guid IdEmpresa)
         {
-
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
-            if (empresa.IsFailed)
-            {
-                return NotFound(empresa.Errors);
-            }
-            var cliente = await _clienteRepo.GetByIdAsync(idCliente);
-            if (cliente.IsFailed)
-            {
-                return BadRequest(cliente.Errors);
-            }
+            if (empresa.IsFailed) return NotFound(empresa.Errors);
 
-            if (cliente.Value.IdEmpresa != IdEmpresa)
-            {
-                return BadRequest("Cliente não percente a empresa");
-            }
+            var cliente = await _clienteRepo.GetByIdAsync(idCliente);
+            if (cliente.IsFailed) return BadRequest(cliente.Errors);
+            if (cliente.Value.IdEmpresa != IdEmpresa) return BadRequest("Cliente não percente a empresa");
 
             return Ok(cliente.Value);
         }
 
+        // Criação
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateClienteDto createClienteDto, Guid IdEmpresa)
+        public async Task<IActionResult> Create([FromBody] CreateClienteDto createClienteDto, [FromRoute] Guid IdEmpresa)
         {
-            if (!ModelState.IsValid) { return BadRequest(ModelState); }
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
-            if (empresa.IsFailed)
-            {
-                return NotFound(empresa.Errors);
-            }
+            if (empresa.IsFailed) return NotFound(empresa.Errors);
+
             var cliente = createClienteDto.ToCreateClienteDto();
             var result = await _clienteRepo.CreateAsync(cliente, IdEmpresa);
-            if (result.IsFailed)
-            {
-                return BadRequest(result.Errors);
-            }
-            return CreatedAtAction(nameof(GetById), new { idCliente = cliente.Id, IdEmpresa = IdEmpresa }, cliente);
+            if (result.IsFailed) return BadRequest(result.Errors);
+
+            return CreatedAtAction(nameof(GetById), new { idCliente = cliente.Id, IdEmpresa }, cliente);
         }
 
-        [HttpPut("{IdCliente}")]
-        public async Task<IActionResult> Update([FromBody] UpdateClienteDto updateClienteDto, [FromRoute] int IdCliente, Guid IdEmpresa)
+        // Atualização
+        [HttpPut("{IdCliente:int}")]
+        public async Task<IActionResult> Update([FromBody] UpdateClienteDto updateClienteDto, [FromRoute] int IdCliente, [FromRoute] Guid IdEmpresa)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
-            if (empresa.IsFailed)
-            {
-                return BadRequest("Empresa não existe");
-            }
+            if (empresa.IsFailed) return BadRequest("Empresa não existe");
 
             var result = await _clienteRepo.UpdateAsync(updateClienteDto, IdCliente, IdEmpresa);
-            if (result.IsFailed)
-            {
-                return BadRequest(result.Errors);
-            }
+            if (result.IsFailed) return BadRequest(result.Errors);
+
             return Ok(result.Value);
         }
     }
