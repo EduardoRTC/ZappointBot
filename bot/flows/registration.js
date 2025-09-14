@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { apiBaseUrl } = require('../config');
+const { apiBaseUrl, companyId } = require('../config');
 const {
   menuText,
   startText,
@@ -29,7 +29,7 @@ module.exports = {
     }
     session.cpf = text.replace(/\D/g, '');
     try {
-      const resp = await axios.get(`${apiBaseUrl}/clients?cpf=${session.cpf}`);
+      const resp = await axios.get(`${apiBaseUrl}/${companyId}/cliente?cpf=${session.cpf}`);
       if (resp.data && resp.data.length > 0) {
         session.client = resp.data[0];
         session.step = 'mainMenu';
@@ -65,9 +65,14 @@ module.exports = {
     const [firstName, ...rest] = text.split(' ');
     const lastName = rest.join(' ');
     try {
-      const existing = await axios.get(`${apiBaseUrl}/clients?cpf=${session.cpf}`);
+      const existing = await axios.get(`${apiBaseUrl}/${companyId}/cliente?cpf=${session.cpf}`);
       if (!existing.data || existing.data.length === 0) {
-        const created = await axios.post(`${apiBaseUrl}/clients`, { cpf: session.cpf, firstName, lastName });
+        const phone = msg.from.split('@')[0];
+        const created = await axios.post(`${apiBaseUrl}/${companyId}/cliente`, {
+          cpf: session.cpf,
+          nome: `${firstName} ${lastName}`,
+          telefone: phone
+        });
         session.client = created.data;
       } else {
         session.client = existing.data[0];
