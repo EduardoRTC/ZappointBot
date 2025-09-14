@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { apiBaseUrl } = require('../config');
-const { menuText, serviceText, startText } = require('../utils/messages');
+const { menuText, startText } = require('../utils/messages');
+const { listServices } = require('./appointment');
 
 module.exports = {
   mainMenu: async (session, msg, text) => {
@@ -9,7 +10,7 @@ module.exports = {
       await msg.reply(startText());
     } else if (text === '1') {
       session.step = 'service';
-      await msg.reply(serviceText());
+      await listServices(session, msg);
     } else if (text === '2') {
       const resp = await axios.get(`${apiBaseUrl}/clients/${session.client.id}/appointments`, { params: { status: 'pending' } });
       session.appointments = resp.data || [];

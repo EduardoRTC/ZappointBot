@@ -1,21 +1,42 @@
 const axios = require('axios');
-const { apiBaseUrl } = require('../config');
-const { menuText, serviceText } = require('../utils/messages');
+const { apiBaseUrl, companyId } = require('../config');
+const { menuText } = require('../utils/messages');
+
+function toIsoDate(dateStr) {
+  const [day, month, year] = dateStr.split('/');
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+async function listServices(session, msg) {
+  const resp = await axios.get(`${apiBaseUrl}/${companyId}/servico`);
+  session.services = resp.data || [];
+  if (session.services.length === 0) {
+    await msg.reply('Nenhum serviço disponível.');
+    session.step = 'mainMenu';
+    await msg.reply(menuText());
+    return;
+  }
+  let text = 'Qual serviço gostaria de agendar?\n';
+  session.services.forEach((s, i) => { text += `${i + 1} - ${s.descricao}\n`; });
+  text += '0 - Voltar';
+  await msg.reply(text.trim());
+}
 
 module.exports = {
+  listServices,
   service: async (session, msg, text) => {
     if (text === '0' || text.toLowerCase() === 'voltar') {
       session.step = 'mainMenu';
       await msg.reply(menuText());
       return;
     }
-    const services = { '1': 'Cabelo', '2': 'Barba', '3': 'Cabelo e Barba' };
-    if (!services[text]) {
+    const idx = parseInt(text) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= session.services.length) {
       await msg.reply('Opção inválida.');
       return;
     }
-    session.service = services[text];
-    const profResp = await axios.get(`${apiBaseUrl}/professionals`);
+    session.service = session.services[idx];
+    const profResp = await axios.get(`${apiBaseUrl}/${companyId}/usuario`);
     session.professionals = profResp.data || [];
     if (session.professionals.length === 0) {
       await msg.reply('Nenhum profissional disponível.');
@@ -26,7 +47,7 @@ module.exports = {
     session.step = 'professional';
     let profText = 'Com qual profissional?\n';
     session.professionals.forEach((p, i) => {
-      profText += `${i + 1} - ${p.name}\n`;
+      profText += `${i + 1} - ${p.nomeInteiro}\n`;
     });
     profText += '0 - Voltar';
     await msg.reply(profText.trim());
@@ -35,7 +56,7 @@ module.exports = {
   professional: async (session, msg, text) => {
     if (text === '0' || text.toLowerCase() === 'voltar') {
       session.step = 'service';
-      await msg.reply(serviceText());
+      await listServices(session, msg);
       return;
     }
     const idx = parseInt(text) - 1;
@@ -44,40 +65,26 @@ module.exports = {
       return;
     }
     session.professional = session.professionals[idx];
-    const dateResp = await axios.get(`${apiBaseUrl}/professionals/${session.professional.id}/available-dates`);
-    session.dates = dateResp.data || [];
-    if (session.dates.length === 0) {
-      await msg.reply('Nenhuma data disponível.');
-      session.step = 'mainMenu';
-      await msg.reply(menuText());
-      return;
-    }
     session.step = 'date';
-    let dateText = 'Qual o melhor dia para você?\n';
-    session.dates.forEach((d, i) => { dateText += `${i + 1} - ${d}\n`; });
-    dateText += '0 - Voltar';
-    await msg.reply(dateText.trim());
+    await msg.reply('Qual o melhor dia para você? (DD/MM/AAAA)\n0 - Voltar');
   },
 
   date: async (session, msg, text) => {
     if (text === '0' || text.toLowerCase() === 'voltar') {
       session.step = 'professional';
       let profText = 'Com qual profissional?\n';
-      session.professionals.forEach((p, i) => {
-        profText += `${i + 1} - ${p.name}\n`;
-      });
+      session.professionals.forEach((p, i) => { profText += `${i + 1} - ${p.nomeInteiro}\n`; });
       profText += '0 - Voltar';
       await msg.reply(profText.trim());
       return;
     }
-    const dIdx = parseInt(text) - 1;
-    if (isNaN(dIdx) || dIdx < 0 || dIdx >= session.dates.length) {
-      await msg.reply('Opção inválida.');
-      return;
-    }
-    session.date = session.dates[dIdx];
-    const timeResp = await axios.get(`${apiBaseUrl}/professionals/${session.professional.id}/available-times`, { params: { date: session.date } });
-    session.times = timeResp.data || [];
+    session.date = text;
+    const resp = await axios.get(`${apiBaseUrl}/${companyId}/agendamento`);
+    const appointments = resp.data || [];
+    const day = toIsoDate(session.date);
+    const busy = appointments.filter(a => a.idUsuario === session.professional.id && a.dataHoraInicio.startsWith(day));
+    const allTimes = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+    session.times = allTimes.filter(t => !busy.some(b => b.dataHoraInicio.includes(t)));
     if (session.times.length === 0) {
       await msg.reply('Nenhum horário disponível.');
       session.step = 'mainMenu';
@@ -94,10 +101,7 @@ module.exports = {
   time: async (session, msg, text) => {
     if (text === '0' || text.toLowerCase() === 'voltar') {
       session.step = 'date';
-      let dateText = 'Qual o melhor dia para você?\n';
-      session.dates.forEach((d, i) => { dateText += `${i + 1} - ${d}\n`; });
-      dateText += '0 - Voltar';
-      await msg.reply(dateText.trim());
+      await msg.reply('Qual o melhor dia para você? (DD/MM/AAAA)\n0 - Voltar');
       return;
     }
     const tIdx = parseInt(text) - 1;
@@ -107,7 +111,7 @@ module.exports = {
     }
     session.time = session.times[tIdx];
     session.step = 'confirmAppointment';
-    await msg.reply(`Certo, agora confirme o agendamento:\n${session.service} com o profissional ${session.professional.name}, no dia ${session.date} às ${session.time}.\n\n1 - Confirmar\n2 - Cancelar e iniciar novamente\n0 - Voltar`);
+    await msg.reply(`Certo, agora confirme o agendamento:\n${session.service.descricao} com o profissional ${session.professional.nomeInteiro}, no dia ${session.date} às ${session.time}.\n\n1 - Confirmar\n2 - Cancelar e iniciar novamente\n0 - Voltar`);
   },
 
   confirmAppointment: async (session, msg, text) => {
@@ -120,19 +124,19 @@ module.exports = {
       return;
     }
     if (text === '1') {
-      await axios.post(`${apiBaseUrl}/appointments`, {
-        clientId: session.client.id,
-        professionalId: session.professional.id,
-        service: session.service,
-        date: session.date,
-        time: session.time
+      const dateISO = toIsoDate(session.date);
+      await axios.post(`${apiBaseUrl}/${companyId}/agendamento`, {
+        idCliente: session.client.id,
+        idUsuario: session.professional.id,
+        idServico: [session.service.id],
+        dataHoraInicio: `${dateISO}T${session.time}:00`
       });
       await msg.reply('Agendamento confirmado com sucesso! ✔');
       session.step = 'mainMenu';
       await msg.reply(menuText());
     } else if (text === '2') {
       session.step = 'service';
-      await msg.reply(serviceText());
+      await listServices(session, msg);
     } else {
       await msg.reply('Opção inválida.');
     }
