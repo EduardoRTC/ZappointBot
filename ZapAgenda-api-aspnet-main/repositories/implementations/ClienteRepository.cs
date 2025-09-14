@@ -82,5 +82,15 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
             }
             return Result.Ok(cliente);
         }
+
+        public async Task<Result<Cliente>> GetByCpfAsync(string cpf, Guid IdEmpresa)
+        {
+            var cliente = await _context.Cliente.FirstOrDefaultAsync(c => c.Cpf == cpf && c.IdEmpresa == IdEmpresa);
+            if (cliente == null)
+            {
+                return Result.Fail($"Não existe cliente de cpf: {cpf}");
+            }
+            return Result.Ok(cliente);
+        }
     }
 }

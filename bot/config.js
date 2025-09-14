@@ -1,5 +1,5 @@
 module.exports = {
-  apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3000',
+  apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:8080',
   companyId: process.env.COMPANY_ID || '00000000-0000-0000-0000-000000000000',
   // Update with the phone numbers (digits only) that the bot should respond to
   allowedNumbers: [

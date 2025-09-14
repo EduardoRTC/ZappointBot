@@ -17,6 +17,31 @@ namespace ZapAgenda_api_aspnet.controllers
         }
 
 
+        [HttpGet]
+        public async Task<IActionResult> Get([FromQuery] string? cpf, Guid IdEmpresa)
+        {
+            var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
+            if (empresa.IsFailed)
+            {
+                return NotFound(empresa.Errors);
+            }
+
+            if (string.IsNullOrWhiteSpace(cpf))
+            {
+                var clientes = await _clienteRepo.GetAllPorEmpresaAsync(IdEmpresa);
+                return Ok(clientes);
+            }
+
+            var cliente = await _clienteRepo.GetByCpfAsync(cpf, IdEmpresa);
+            if (cliente.IsFailed)
+            {
+                return BadRequest(cliente.Errors);
+            }
+
+            return Ok(new[] { cliente.Value });
+        }
+
+
         [HttpGet("{idCliente}")]
         public async Task<IActionResult> GetById([FromRoute] int idCliente, Guid IdEmpresa)
         {
