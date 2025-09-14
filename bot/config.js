@@ -1,4 +1,5 @@
 const GUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+require('dotenv').config();
 
 const {
   API_BASE_URL = 'http://localhost:8080',
