@@ -3,6 +3,6 @@ module.exports = {
   companyId: process.env.COMPANY_ID || '00000000-0000-0000-0000-000000000000',
   // Update with the phone numbers (digits only) that the bot should respond to
   allowedNumbers: [
-    process.env.ALLOWED_NUMBER || '5511999999999'
+    process.env.ALLOWED_NUMBER || '554598406778'
   ]
 };
