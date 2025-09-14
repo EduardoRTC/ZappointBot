@@ -10,76 +10,57 @@ const {
   askNameText
 } = require('../utils/messages');
 
-/**
- * Caminho base para operações de cliente (GET para consulta, POST para criação).
- * Ajuste se seu backend usar outro padrão.
- */
-const CLIENT_PATH = 'cliente';
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
-const jsonHeaders = { 'Content-Type': 'application/json' };
-
-/**
- * Normaliza resposta de API que pode vir como array ou objeto.
- */
-function normalizeClientResponse(data) {
-  if (!data) return null;
-  if (Array.isArray(data)) return data[0] || null;
-  return data;
+function joinUrl(...parts) {
+  return parts
+    .map((p, i) => (i === 0 ? String(p).replace(/\/+$/g, '') : String(p).replace(/^\/+|\/+$/g, '')))
+    .filter(Boolean)
+    .join('/');
 }
 
-/**
- * Consulta cliente por CPF usando GET com query string.
- * Retorna `null` se não encontrado.
- */
-async function findClientByCPF(cpf) {
-  const base = `${apiBaseUrl}/${companyId}`;
-  const lookupUrl = `${base}/${CLIENT_PATH}`;
-
-  try {
-    const resp = await axios.get(lookupUrl, {
-      params: { cpf },
-      headers: jsonHeaders
-    });
-    return normalizeClientResponse(resp.data);
-  } catch (e) {
-    const status = e.response?.status;
-    if (status === 404) {
-      return null;
-    }
-    throw e;
-  }
-}
-
-/**
- * Cria cliente via POST.
- */
-async function createClient({ cpf, nome, telefone }) {
-  const base = `${apiBaseUrl}/${companyId}`;
-  const createUrl = `${base}/${CLIENT_PATH}`;
-  const resp = await axios.post(createUrl, { cpf, nome, telefone }, { headers: jsonHeaders });
-  return resp.data;
-}
-
-/**
- * Valida e limpa CPF (mantém só dígitos).
- */
 function sanitizeCPF(text) {
   if (!text) return '';
   return String(text).replace(/\D/g, '');
 }
 
-/**
- * Mensagem padrão de erro (encapsulada para reuso).
- */
+/** Normaliza resposta do GET (pode vir array com 1 item). */
+function normalizeClient(data) {
+  if (!data) return null;
+  if (Array.isArray(data)) return data[0] || null;
+  return data;
+}
+
+/** GET /{companyId}/cliente?cpf=...  → retorna objeto ou null */
+async function findClientByCPF(cpf) {
+  const url = joinUrl(apiBaseUrl, companyId, 'cliente');
+  try {
+    const resp = await axios.get(url, { params: { cpf } });
+    return normalizeClient(resp.data);
+  } catch (e) {
+    const status = e?.response?.status;
+    // Seu controller retorna BadRequest (400) quando GetByCpfAsync falha — tratamos como "não achou".
+    if (status === 400) return null;
+    // 404 aqui indica empresa inválida (IdEmpresa não existe).
+    throw e;
+  }
+}
+
+/** POST /{companyId}/cliente  → cria e retorna o cliente */
+async function createClient({ cpf, nome, telefone }) {
+  const url = joinUrl(apiBaseUrl, companyId, 'cliente');
+  const resp = await axios.post(url, { cpf, nome, telefone }, { headers: JSON_HEADERS });
+  return resp.data;
+}
+
+/** Fallback de erro padrão + limpar sessão */
 async function failAndReset(msg, sessions, text = 'Ocorreu um erro. Tente novamente mais tarde.') {
   await msg.reply(text);
   if (sessions && msg && msg.from) delete sessions[msg.from];
 }
 
 module.exports = {
-  /**
-   * Menu inicial: 1 = já tenho CPF (consulta), 2 = novo cadastro.
-   */
+  // 1) Menu inicial
   start: async (session, msg, text) => {
     if (text === '1') {
       session.step = 'awaitExistingCPF';
@@ -92,9 +73,7 @@ module.exports = {
     }
   },
 
-  /**
-   * Fluxo para quem já é cliente: pede CPF e consulta via GET.
-   */
+  // 2) Usuário já cadastrado → pede CPF e consulta (GET)
   awaitExistingCPF: async (session, msg, text, sessions) => {
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
     if (back) {
@@ -113,13 +92,11 @@ module.exports = {
 
     try {
       const client = await findClientByCPF(session.cpf);
-
       if (client) {
         session.client = client;
         session.step = 'mainMenu';
         await msg.reply(menuText());
       } else {
-        // Não encontrou: direciona para fluxo de novo cadastro
         session.step = 'awaitCPF';
         await msg.reply(
           'Não encontrei seu cadastro, vamos realizar um novo.\n' +
@@ -127,14 +104,16 @@ module.exports = {
         );
       }
     } catch (e) {
-      console.error('[registration.awaitExistingCPF] Error:', e);
+      console.error('[registration.awaitExistingCPF] Error:', e?.response?.status, e?.response?.data || e);
+      if (e?.response?.status === 404) {
+        await failAndReset(msg, sessions, 'Empresa não encontrada. Verifique o companyId no backend.');
+        return;
+      }
       await failAndReset(msg, sessions, 'Erro ao verificar cadastro.');
     }
   },
 
-  /**
-   * Fluxo de novo cadastro: pede CPF e vai para nome.
-   */
+  // 3) Novo cadastro → pede CPF
   awaitCPF: async (session, msg, text) => {
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
     if (back) {
@@ -154,10 +133,7 @@ module.exports = {
     await msg.reply(askNameText());
   },
 
-  /**
-   * Depois do CPF, pede nome e tenta criar cadastro.
-   * Se já existir, apenas usa o existente.
-   */
+  // 4) Novo cadastro → pede nome e cria (POST). Se já existir, só usa o existente.
   awaitName: async (session, msg, text, sessions) => {
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
     if (back) {
@@ -166,7 +142,6 @@ module.exports = {
       return;
     }
 
-    // Nome completo: junta tudo que vier
     const parts = String(text).trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) {
       await msg.reply('Por favor, informe seu nome. Ex: João da Silva\n0 - Voltar');
@@ -175,11 +150,10 @@ module.exports = {
     const fullName = parts.join(' ');
 
     try {
-      // 1) Verifica se já existe
+      // Se já existe, reutiliza
       const existing = await findClientByCPF(session.cpf);
 
       if (!existing) {
-        // 2) Cria se não existir
         const phone = (msg.from || '').split('@')[0] || '';
         const created = await createClient({
           cpf: session.cpf,
@@ -194,8 +168,19 @@ module.exports = {
       session.step = 'mainMenu';
       await msg.reply('Ok, pré-cadastro realizado com sucesso!\n' + menuText());
     } catch (e) {
-      console.error('[registration.awaitName] Error:', e);
-      await failAndReset(msg, sessions, 'Não foi possível realizar o cadastro.');
+      console.error('[registration.awaitName] Error:', e?.response?.status, e?.response?.data || e);
+      if (e?.response?.status === 404) {
+        await msg.reply('Empresa/rota não encontrada. Confirme o companyId e a rota no backend.');
+      } else if (e?.response?.status === 409) {
+        await msg.reply('Cadastro já existente para este CPF.');
+      } else if (e?.response?.status === 400) {
+        await msg.reply('Dados inválidos para criação do cliente.');
+      } else if (e?.response?.status === 405) {
+        await msg.reply('Método não permitido na rota. (GET para consultar, POST para criar).');
+      } else {
+        await msg.reply('Não foi possível realizar o cadastro.');
+      }
+      delete sessions[msg.from];
     }
   }
 };
