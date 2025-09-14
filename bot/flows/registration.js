@@ -11,11 +11,10 @@ const {
 } = require('../utils/messages');
 
 /**
- * Ajuste estes caminhos se o seu backend usar rotas diferentes.
- * Ex.: "cliente/consultar" para consulta e "cliente" para criação.
+ * Caminho base para operações de cliente (GET para consulta, POST para criação).
+ * Ajuste se seu backend usar outro padrão.
  */
-const LOOKUP_PATH = 'cliente/consultar'; // POST para consultar por CPF
-const CREATE_PATH = 'cliente';           // POST para criar cliente
+const CLIENT_PATH = 'cliente';
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
 
@@ -29,22 +28,22 @@ function normalizeClientResponse(data) {
 }
 
 /**
- * Consulta cliente por CPF usando POST (evita 405).
- * Lança erro se a chamada der problema diferente de 404/405.
+ * Consulta cliente por CPF usando GET com query string.
+ * Retorna `null` se não encontrado.
  */
 async function findClientByCPF(cpf) {
   const base = `${apiBaseUrl}/${companyId}`;
-  const lookupUrl = `${base}/${LOOKUP_PATH}`;
+  const lookupUrl = `${base}/${CLIENT_PATH}`;
 
   try {
-    const resp = await axios.post(lookupUrl, { cpf }, { headers: jsonHeaders });
+    const resp = await axios.get(lookupUrl, {
+      params: { cpf },
+      headers: jsonHeaders
+    });
     return normalizeClientResponse(resp.data);
   } catch (e) {
     const status = e.response?.status;
-    // Se a rota de consulta não existir/for proibida, propaga o erro para ser tratado acima
-    if (status === 404 || status === 405) {
-      // Deixe visível no log para facilitar ajuste de rota
-      console.warn(`[registration] LOOKUP_PATH não encontrado (${LOOKUP_PATH}). Status: ${status}`);
+    if (status === 404) {
       return null;
     }
     throw e;
@@ -56,7 +55,7 @@ async function findClientByCPF(cpf) {
  */
 async function createClient({ cpf, nome, telefone }) {
   const base = `${apiBaseUrl}/${companyId}`;
-  const createUrl = `${base}/${CREATE_PATH}`;
+  const createUrl = `${base}/${CLIENT_PATH}`;
   const resp = await axios.post(createUrl, { cpf, nome, telefone }, { headers: jsonHeaders });
   return resp.data;
 }
@@ -94,7 +93,7 @@ module.exports = {
   },
 
   /**
-   * Fluxo para quem já é cliente: pede CPF e consulta via POST.
+   * Fluxo para quem já é cliente: pede CPF e consulta via GET.
    */
   awaitExistingCPF: async (session, msg, text, sessions) => {
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
