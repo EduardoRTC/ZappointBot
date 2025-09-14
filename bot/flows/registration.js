@@ -24,43 +24,38 @@ function sanitizeCPF(text) {
   return String(text).replace(/\D/g, '');
 }
 
-/** Normaliza resposta do GET (pode vir array com 1 item). */
 function normalizeClient(data) {
   if (!data) return null;
   if (Array.isArray(data)) return data[0] || null;
   return data;
 }
 
-/** GET /{companyId}/cliente?cpf=...  → retorna objeto ou null */
+/** GET /{companyId}/cliente/by-cpf?cpf=... → objeto ou null */
 async function findClientByCPF(cpf) {
-  const url = joinUrl(apiBaseUrl, companyId, 'cliente');
+  const url = joinUrl(apiBaseUrl, companyId, 'cliente', 'by-cpf');
   try {
     const resp = await axios.get(url, { params: { cpf } });
     return normalizeClient(resp.data);
   } catch (e) {
     const status = e?.response?.status;
-    // Seu controller retorna BadRequest (400) quando GetByCpfAsync falha — tratamos como "não achou".
-    if (status === 400) return null;
-    // 404 aqui indica empresa inválida (IdEmpresa não existe).
-    throw e;
+    if (status === 400) return null; // trata "não achou" como null
+    throw e; // 404 geralmente é empresa inválida
   }
 }
 
-/** POST /{companyId}/cliente  → cria e retorna o cliente */
+/** POST /{companyId}/cliente → cria e retorna o cliente */
 async function createClient({ cpf, nome, telefone }) {
   const url = joinUrl(apiBaseUrl, companyId, 'cliente');
   const resp = await axios.post(url, { cpf, nome, telefone }, { headers: JSON_HEADERS });
   return resp.data;
 }
 
-/** Fallback de erro padrão + limpar sessão */
 async function failAndReset(msg, sessions, text = 'Ocorreu um erro. Tente novamente mais tarde.') {
   await msg.reply(text);
   if (sessions && msg && msg.from) delete sessions[msg.from];
 }
 
 module.exports = {
-  // 1) Menu inicial
   start: async (session, msg, text) => {
     if (text === '1') {
       session.step = 'awaitExistingCPF';
@@ -73,7 +68,6 @@ module.exports = {
     }
   },
 
-  // 2) Usuário já cadastrado → pede CPF e consulta (GET)
   awaitExistingCPF: async (session, msg, text, sessions) => {
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
     if (back) {
@@ -113,7 +107,6 @@ module.exports = {
     }
   },
 
-  // 3) Novo cadastro → pede CPF
   awaitCPF: async (session, msg, text) => {
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
     if (back) {
@@ -133,7 +126,6 @@ module.exports = {
     await msg.reply(askNameText());
   },
 
-  // 4) Novo cadastro → pede nome e cria (POST). Se já existir, só usa o existente.
   awaitName: async (session, msg, text, sessions) => {
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
     if (back) {
@@ -150,7 +142,6 @@ module.exports = {
     const fullName = parts.join(' ');
 
     try {
-      // Se já existe, reutiliza
       const existing = await findClientByCPF(session.cpf);
 
       if (!existing) {
@@ -176,7 +167,7 @@ module.exports = {
       } else if (e?.response?.status === 400) {
         await msg.reply('Dados inválidos para criação do cliente.');
       } else if (e?.response?.status === 405) {
-        await msg.reply('Método não permitido na rota. (GET para consultar, POST para criar).');
+        await msg.reply('Método não permitido na rota. (GET by-cpf para consultar, POST /cliente para criar).');
       } else {
         await msg.reply('Não foi possível realizar o cadastro.');
       }

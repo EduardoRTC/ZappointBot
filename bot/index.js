@@ -1,17 +1,22 @@
+'use strict';
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { allowedNumbers } = require('./config');
+
 const {
   start,
   awaitExistingCPF,
   awaitCPF,
   awaitName
 } = require('./flows/registration');
+
 const {
   mainMenu,
   confirmExisting,
   cancelExisting
 } = require('./flows/menu');
+
 const {
   service,
   professional,
@@ -19,6 +24,7 @@ const {
   time,
   confirmAppointment
 } = require('./flows/appointment');
+
 const { startText } = require('./utils/messages');
 
 const client = new Client({ authStrategy: new LocalAuth() });
@@ -48,30 +54,35 @@ client.on('ready', () => {
 });
 
 client.on('message', async msg => {
-  const sender = (msg.author || msg.from).split('@')[0];
-  if (msg.from.endsWith('@g.us')) {
-    console.log(`Mensagem de ${sender} enviada de um grupo IGNORADA`);
-    return;
-  }
-  if (!allowedNumbers.includes(sender)) {
-    console.log(`Mensagem de numero ${sender} IGNORADA Não é whitelisted`);
-    return;
-  }
-  console.log(`Mensagem de numero ${sender} permitido`);
-
-  const chatId = msg.from;
-  const text = msg.body.trim();
-
-  if (!sessions[chatId]) {
-    sessions[chatId] = { step: 'start' };
-    await msg.reply(startText());
-    return;
-  }
-
-  const session = sessions[chatId];
-  const handler = handlers[session.step];
-
   try {
+    const sender = (msg.author || msg.from).split('@')[0];
+
+    // Ignora grupos
+    if (msg.from.endsWith('@g.us')) {
+      console.log(`Mensagem de ${sender} enviada de um grupo IGNORADA`);
+      return;
+    }
+
+    // Whitelist simples
+    if (!allowedNumbers.includes(sender)) {
+      console.log(`Mensagem de numero ${sender} IGNORADA Não é whitelisted`);
+      return;
+    }
+    console.log(`Mensagem de numero ${sender} permitido`);
+
+    const chatId = msg.from;
+    const text = (msg.body || '').trim();
+
+    // Cria sessão e manda menu inicial
+    if (!sessions[chatId]) {
+      sessions[chatId] = { step: 'start' };
+      await msg.reply(startText());
+      return;
+    }
+
+    const session = sessions[chatId];
+    const handler = handlers[session.step];
+
     if (handler) {
       await handler(session, msg, text, sessions);
     } else {
@@ -80,8 +91,10 @@ client.on('message', async msg => {
     }
   } catch (err) {
     console.error(err);
-    await msg.reply('Ocorreu um erro ao processar sua solicitação.');
-    delete sessions[chatId];
+    try {
+      await msg.reply('Ocorreu um erro ao processar sua solicitação.');
+    } catch {}
+    delete sessions[msg.from];
   }
 });
 
