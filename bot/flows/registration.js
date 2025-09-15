@@ -39,12 +39,15 @@ function normalizeClient(data) {
 async function findClientByCPF(cpf) {
   const url = joinUrl(apiBaseUrl, companyId, 'cliente', 'by-cpf');
   try {
-    const resp = await axios.get(url, { params: { cpf } });
+    // Garante que o CPF enviado esteja apenas com números
+    const clean = sanitizeCPF(cpf);
+    const resp = await axios.get(url, { params: { cpf: clean } });
     return normalizeClient(resp.data);
   } catch (e) {
     const status = e?.response?.status;
-    if (status === 400) return null; // trata "não achou" como null
-    throw e; // 404 geralmente é empresa inválida
+    // Quando o backend retorna 400 ou 404 significa que o CPF não foi localizado
+    if (status === 400 || status === 404) return null;
+    throw e; // outros códigos de status devem ser tratados pelo chamador
   }
 }
 
