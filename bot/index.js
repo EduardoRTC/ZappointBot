@@ -9,7 +9,8 @@ const {
   start,
   awaitExistingCPF,
   awaitCPF,
-  awaitName
+  awaitName,
+  confirmClient
 } = require('./flows/registration');
 
 const {
@@ -36,6 +37,7 @@ const handlers = {
   awaitExistingCPF,
   awaitCPF,
   awaitName,
+  confirmClient,
   mainMenu,
   confirmExisting,
   cancelExisting,
