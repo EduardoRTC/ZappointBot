@@ -96,7 +96,10 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
                 return Result.Fail(cpfValido.Errors);
             }
 
-            var cliente = await _context.Cliente.FirstOrDefaultAsync(c => c.Cpf == cpfLimpo && c.IdEmpresa == IdEmpresa);
+            var cliente = await _context.Cliente
+                .FirstOrDefaultAsync(c =>
+                    c.IdEmpresa == IdEmpresa &&
+                    c.Cpf.Replace(".", "").Replace("-", "") == cpfLimpo);
             if (cliente == null)
             {
                 return Result.Fail($"Não existe cliente de cpf: {cpf}");
