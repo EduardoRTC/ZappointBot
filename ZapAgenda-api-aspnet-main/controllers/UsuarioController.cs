@@ -3,10 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using ZapAgenda_api_aspnet.Dtos.Usuario;
 using ZapAgenda_api_aspnet.Mappers;
 using ZapAgenda_api_aspnet.repositories.interfaces;
+using ZapAgenda_api_aspnet.helpers;
 
 namespace ZapAgenda_api_aspnet.controllers
 {
-    [Route("{IdEmpresa}/usuario")]
+    [Route("usuario")]
     public class UsuarioController : ControllerBase
     {
         private readonly IUsuarioRepository _usuarioRepo;
@@ -19,8 +20,9 @@ namespace ZapAgenda_api_aspnet.controllers
 
         //[Authorize]
         [HttpGet("{idUsuario:int}")]
-        public async Task<IActionResult> GetById([FromRoute] int idUsuario, Guid IdEmpresa)
+        public async Task<IActionResult> GetById([FromRoute] int idUsuario)
         {
+            var IdEmpresa = EmpresaConfig.DefaultId;
             if (await _empresaRepo.GetByGuidAsync(IdEmpresa) == null)
             {
                 return NotFound($"Não existe empresa com ID {IdEmpresa}.");
@@ -41,12 +43,13 @@ namespace ZapAgenda_api_aspnet.controllers
 
         //[Authorize]
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateUsuarioDto createUsuarioDto, Guid IdEmpresa)
+        public async Task<IActionResult> Create([FromBody] CreateUsuarioDto createUsuarioDto)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
+            var IdEmpresa = EmpresaConfig.DefaultId;
             if (await _empresaRepo.GetByGuidAsync(IdEmpresa) == null)
             {
                 return NotFound($"Não existe empresa com ID {IdEmpresa}.");
@@ -58,14 +61,14 @@ namespace ZapAgenda_api_aspnet.controllers
             {
                 return BadRequest(new { Erros = result.Errors.Select(e => e.Message) });
             }
-            return CreatedAtAction(nameof(GetById), new { idUsuario = usuario.Id, IdEmpresa = IdEmpresa }, usuario);
+            return CreatedAtAction(nameof(GetById), new { idUsuario = usuario.Id }, usuario);
         }
 
         //[Authorize]
         [HttpGet]
-        public async Task<IActionResult> GetAllByIdEmpresa(Guid IdEmpresa)
+        public async Task<IActionResult> GetAllByIdEmpresa()
         {
-            var usuarios = await _usuarioRepo.GetUsuariosByEmpresa(IdEmpresa);
+            var usuarios = await _usuarioRepo.GetUsuariosByEmpresa(EmpresaConfig.DefaultId);
             if (!usuarios.IsSuccess)
             {
                 return NotFound(new { message = usuarios.Errors });
@@ -74,9 +77,9 @@ namespace ZapAgenda_api_aspnet.controllers
         }
 
         [HttpGet("opcoes-filtro")]
-        public async Task<IActionResult> GetAllByEmpresaParaFiltro(Guid IdEmpresa)
+        public async Task<IActionResult> GetAllByEmpresaParaFiltro()
         {
-            var usuarios = await _usuarioRepo.GetNomeUsuarioDto(IdEmpresa);
+            var usuarios = await _usuarioRepo.GetNomeUsuarioDto(EmpresaConfig.DefaultId);
             if (usuarios.IsFailed)
             {
                 return BadRequest(usuarios.Errors);
@@ -86,7 +89,7 @@ namespace ZapAgenda_api_aspnet.controllers
 
         [Authorize]
         [HttpPut("{idUsuario:int}")]
-        public async Task<IActionResult> UpdateUsuario([FromBody] UpdateUsuarioDto updateUsuarioDto, [FromRoute] int idUsuario, Guid IdEmpresa)
+        public async Task<IActionResult> UpdateUsuario([FromBody] UpdateUsuarioDto updateUsuarioDto, [FromRoute] int idUsuario)
         {
 
             if (!ModelState.IsValid)
@@ -94,6 +97,7 @@ namespace ZapAgenda_api_aspnet.controllers
                 return BadRequest(ModelState);
             }
 
+            var IdEmpresa = EmpresaConfig.DefaultId;
             if (await _empresaRepo.GetByGuidAsync(IdEmpresa) == null)
             {
                 return NotFound($"Não existe empresa de id{IdEmpresa}");
@@ -108,12 +112,13 @@ namespace ZapAgenda_api_aspnet.controllers
 
         [Authorize]
         [HttpPatch("{idUsuario:int}")]
-        public async Task<IActionResult> UpdateSenhaUsuario([FromBody] UpdateSenhaUsuarioDto updateSenhaUsuarioDto, [FromRoute] int idUsuario, Guid IdEmpresa)
+        public async Task<IActionResult> UpdateSenhaUsuario([FromBody] UpdateSenhaUsuarioDto updateSenhaUsuarioDto, [FromRoute] int idUsuario)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
+            var IdEmpresa = EmpresaConfig.DefaultId;
             if (await _empresaRepo.GetByGuidAsync(IdEmpresa) == null)
             {
                 return NotFound($"Não existe empresa de id{IdEmpresa}");
