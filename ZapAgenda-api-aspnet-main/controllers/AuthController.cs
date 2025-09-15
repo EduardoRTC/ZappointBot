@@ -3,10 +3,11 @@ using ZapAgenda_api_aspnet.Dtos.Usuario;
 using ZapAgenda_api_aspnet.models;
 using ZapAgenda_api_aspnet.repositories.interfaces;
 using ZapAgenda_api_aspnet.services.interfaces;
+using ZapAgenda_api_aspnet.helpers;
 
 namespace ZapAgenda_api_aspnet.controllers
 {
-    [Route("{IdEmpresa}/autentificacao")]
+    [Route("autentificacao")]
     public class AuthController : ControllerBase
     {
         private readonly IConfiguration _configuration;
@@ -21,8 +22,9 @@ namespace ZapAgenda_api_aspnet.controllers
             _tokenService = tokenService;
         }
         [HttpPost]
-        public async Task<IActionResult> Login([FromBody] LoginDto loginDto, Guid IdEmpresa)
+        public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
+            var IdEmpresa = EmpresaConfig.DefaultId;
             var usuario = await _usuarioRepo.GetUsariosByEmpresaAndNomeUsuario(IdEmpresa, loginDto.NomeUsuario);
             if (usuario.IsFailed)
             {

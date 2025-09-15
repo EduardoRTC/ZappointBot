@@ -2,11 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using ZapAgenda_api_aspnet.Dtos.Cliente;
 using ZapAgenda_api_aspnet.Mappers;
 using ZapAgenda_api_aspnet.repositories.interfaces;
+using ZapAgenda_api_aspnet.helpers;
 
 namespace ZapAgenda_api_aspnet.controllers
 {
     [ApiController]
-    [Route("{IdEmpresa:guid}/cliente")]
+    [Route("cliente")]
     public class ClienteController : ControllerBase
     {
         private readonly IClienteRepository _clienteRepo;
@@ -20,8 +21,9 @@ namespace ZapAgenda_api_aspnet.controllers
 
         // Lista todos os clientes da empresa
         [HttpGet]
-        public async Task<IActionResult> GetAll([FromRoute] Guid IdEmpresa)
+        public async Task<IActionResult> GetAll()
         {
+            var IdEmpresa = EmpresaConfig.DefaultId;
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
             if (empresa.IsFailed) return NotFound(empresa.Errors);
 
@@ -31,11 +33,12 @@ namespace ZapAgenda_api_aspnet.controllers
 
         // Consulta por CPF (rota dedicada)
         [HttpGet("by-cpf")]
-        public async Task<IActionResult> GetByCpf([FromQuery] string cpf, [FromRoute] Guid IdEmpresa)
+        public async Task<IActionResult> GetByCpf([FromQuery] string cpf)
         {
             if (string.IsNullOrWhiteSpace(cpf))
                 return BadRequest("CPF obrigatório.");
 
+            var IdEmpresa = EmpresaConfig.DefaultId;
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
             if (empresa.IsFailed) return NotFound(empresa.Errors);
 
@@ -47,8 +50,9 @@ namespace ZapAgenda_api_aspnet.controllers
 
         // Busca por ID
         [HttpGet("{idCliente:int}")]
-        public async Task<IActionResult> GetById([FromRoute] int idCliente, [FromRoute] Guid IdEmpresa)
+        public async Task<IActionResult> GetById([FromRoute] int idCliente)
         {
+            var IdEmpresa = EmpresaConfig.DefaultId;
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
             if (empresa.IsFailed) return NotFound(empresa.Errors);
 
@@ -61,10 +65,11 @@ namespace ZapAgenda_api_aspnet.controllers
 
         // Criação
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateClienteDto createClienteDto, [FromRoute] Guid IdEmpresa)
+        public async Task<IActionResult> Create([FromBody] CreateClienteDto createClienteDto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
+            var IdEmpresa = EmpresaConfig.DefaultId;
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
             if (empresa.IsFailed) return NotFound(empresa.Errors);
 
@@ -72,15 +77,16 @@ namespace ZapAgenda_api_aspnet.controllers
             var result = await _clienteRepo.CreateAsync(cliente, IdEmpresa);
             if (result.IsFailed) return BadRequest(result.Errors);
 
-            return CreatedAtAction(nameof(GetById), new { idCliente = cliente.Id, IdEmpresa }, cliente);
+            return CreatedAtAction(nameof(GetById), new { idCliente = cliente.Id }, cliente);
         }
 
         // Atualização
         [HttpPut("{IdCliente:int}")]
-        public async Task<IActionResult> Update([FromBody] UpdateClienteDto updateClienteDto, [FromRoute] int IdCliente, [FromRoute] Guid IdEmpresa)
+        public async Task<IActionResult> Update([FromBody] UpdateClienteDto updateClienteDto, [FromRoute] int IdCliente)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
+            var IdEmpresa = EmpresaConfig.DefaultId;
             var empresa = await _empresaRepo.GetByGuidAsync(IdEmpresa);
             if (empresa.IsFailed) return BadRequest("Empresa não existe");
 
