@@ -95,9 +95,9 @@ module.exports = {
     try {
       const client = await findClientByCPF(session.cpf);
       if (client) {
-        session.client = client;
-        session.step = 'mainMenu';
-        await msg.reply(menuText());
+        session.tempClient = client;
+        session.step = 'confirmClient';
+        await msg.reply(`Encontramos seu cadastro: ${client.nome}.\n1 - Sim, sou eu\n0 - Voltar`);
       } else {
         session.step = 'awaitCPF';
         await msg.reply(
@@ -180,6 +180,25 @@ module.exports = {
         await msg.reply('Não foi possível realizar o cadastro.');
       }
       delete sessions[msg.from];
+    }
+  },
+
+  confirmClient: async (session, msg, text) => {
+    const back = text === '0' || String(text).toLowerCase() === 'voltar';
+    if (back) {
+      session.step = 'start';
+      delete session.tempClient;
+      await msg.reply(startText());
+      return;
+    }
+
+    if (text === '1') {
+      session.client = session.tempClient;
+      delete session.tempClient;
+      session.step = 'mainMenu';
+      await msg.reply(menuText());
+    } else {
+      await msg.reply('Opção inválida. Responda 1 para confirmar ou 0 para voltar.');
     }
   }
 };
