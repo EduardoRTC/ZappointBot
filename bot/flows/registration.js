@@ -38,15 +38,22 @@ function normalizeClient(data) {
 /** GET /{companyId}/cliente/by-cpf?cpf=... → objeto ou null */
 async function findClientByCPF(cpf) {
   const url = joinUrl(apiBaseUrl, companyId, 'cliente', 'by-cpf');
+  const clean = sanitizeCPF(cpf);
+  console.log('[findClientByCPF] url:', url, 'cpf:', clean);
   try {
     // Garante que o CPF enviado esteja apenas com números
-    const clean = sanitizeCPF(cpf);
     const resp = await axios.get(url, { params: { cpf: clean } });
-    return normalizeClient(resp.data);
+    const normalized = normalizeClient(resp.data);
+    console.log('[findClientByCPF] response:', normalized);
+    return normalized;
   } catch (e) {
     const status = e?.response?.status;
+    console.error('[findClientByCPF] error:', status, e?.response?.data || e);
     // Quando o backend retorna 400 ou 404 significa que o CPF não foi localizado
-    if (status === 400 || status === 404) return null;
+    if (status === 400 || status === 404) {
+      console.log('[findClientByCPF] CPF não encontrado:', clean);
+      return null;
+    }
     throw e; // outros códigos de status devem ser tratados pelo chamador
   }
 }
@@ -54,17 +61,24 @@ async function findClientByCPF(cpf) {
 /** POST /{companyId}/cliente → cria e retorna o cliente */
 async function createClient({ cpf, nome, telefone }) {
   const url = joinUrl(apiBaseUrl, companyId, 'cliente');
+  console.log('[createClient] url:', url, 'payload:', { cpf, nome, telefone });
   const resp = await axios.post(url, { cpf, nome, telefone }, { headers: JSON_HEADERS });
+  console.log('[createClient] response:', resp.data);
   return resp.data;
 }
 
 async function failAndReset(msg, sessions, text = 'Ocorreu um erro. Tente novamente mais tarde.') {
+  console.log('[failAndReset] message:', text);
   await msg.reply(text);
-  if (sessions && msg && msg.from) delete sessions[msg.from];
+  if (sessions && msg && msg.from) {
+    console.log('[failAndReset] clearing session for', msg.from);
+    delete sessions[msg.from];
+  }
 }
 
 module.exports = {
   start: async (session, msg, text) => {
+    console.log('[registration.start] option:', text);
     if (text === '1') {
       session.step = 'awaitExistingCPF';
       await msg.reply(askCPFExistingText());
@@ -77,6 +91,7 @@ module.exports = {
   },
 
   awaitExistingCPF: async (session, msg, text, sessions) => {
+    console.log('[registration.awaitExistingCPF] text:', text);
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
     if (back) {
       session.step = 'start';
@@ -85,6 +100,7 @@ module.exports = {
     }
 
     const cpf = sanitizeCPF(text);
+    console.log('[registration.awaitExistingCPF] sanitized CPF:', cpf);
     if (cpf.length !== 11) {
       await msg.reply('CPF inválido. Envie apenas os números (11 dígitos) ou 0 para voltar.');
       return;
@@ -93,7 +109,9 @@ module.exports = {
     session.cpf = cpf;
 
     try {
+      console.log('[registration.awaitExistingCPF] searching client by CPF');
       const client = await findClientByCPF(session.cpf);
+      console.log('[registration.awaitExistingCPF] result:', client);
       if (client) {
         session.tempClient = client;
         session.step = 'confirmClient';
@@ -116,6 +134,7 @@ module.exports = {
   },
 
   awaitCPF: async (session, msg, text) => {
+    console.log('[registration.awaitCPF] text:', text);
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
     if (back) {
       session.step = 'start';
@@ -124,6 +143,7 @@ module.exports = {
     }
 
     const cpf = sanitizeCPF(text);
+    console.log('[registration.awaitCPF] sanitized CPF:', cpf);
     if (cpf.length !== 11) {
       await msg.reply('CPF inválido. Envie apenas os números (11 dígitos) ou 0 para voltar.');
       return;
@@ -135,6 +155,7 @@ module.exports = {
   },
 
   awaitName: async (session, msg, text, sessions) => {
+    console.log('[registration.awaitName] text:', text);
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
     if (back) {
       session.step = 'awaitCPF';
@@ -148,17 +169,22 @@ module.exports = {
       return;
     }
     const fullName = parts.join(' ');
+    console.log('[registration.awaitName] fullName:', fullName);
 
     try {
+      console.log('[registration.awaitName] checking existing client for CPF', session.cpf);
       const existing = await findClientByCPF(session.cpf);
+      console.log('[registration.awaitName] existing:', existing);
 
       if (!existing) {
         const phone = (msg.from || '').split('@')[0] || '';
+        console.log('[registration.awaitName] creating client with phone', phone);
         const created = await createClient({
           cpf: session.cpf,
           nome: fullName,
           telefone: phone
         });
+        console.log('[registration.awaitName] created:', created);
         session.client = created;
       } else {
         session.client = existing;
@@ -184,6 +210,7 @@ module.exports = {
   },
 
   confirmClient: async (session, msg, text) => {
+    console.log('[registration.confirmClient] text:', text);
     const back = text === '0' || String(text).toLowerCase() === 'voltar';
     if (back) {
       session.step = 'start';
@@ -193,11 +220,13 @@ module.exports = {
     }
 
     if (text === '1') {
+      console.log('[registration.confirmClient] client confirmed');
       session.client = session.tempClient;
       delete session.tempClient;
       session.step = 'mainMenu';
       await msg.reply(menuText());
     } else {
+      console.log('[registration.confirmClient] invalid option:', text);
       await msg.reply('Opção inválida. Responda 1 para confirmar ou 0 para voltar.');
     }
   }
