@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const { apiBaseUrl, companyId } = require('../config');
+const { apiBaseUrl } = require('../config');
 const {
   menuText,
   startText,
@@ -35,9 +35,9 @@ function normalizeClient(data) {
   return data;
 }
 
-/** GET /{companyId}/cliente/by-cpf?cpf=... → objeto ou null */
+/** GET /cliente/by-cpf?cpf=... → objeto ou null */
 async function findClientByCPF(cpf) {
-  const url = joinUrl(apiBaseUrl, companyId, 'cliente', 'by-cpf');
+  const url = joinUrl(apiBaseUrl, 'cliente', 'by-cpf');
   const clean = sanitizeCPF(cpf);
   console.log('[findClientByCPF] url:', url, 'cpf:', clean);
   try {
@@ -58,9 +58,9 @@ async function findClientByCPF(cpf) {
   }
 }
 
-/** POST /{companyId}/cliente → cria e retorna o cliente */
+/** POST /cliente → cria e retorna o cliente */
 async function createClient({ cpf, nome, telefone }) {
-  const url = joinUrl(apiBaseUrl, companyId, 'cliente');
+  const url = joinUrl(apiBaseUrl, 'cliente');
   console.log('[createClient] url:', url, 'payload:', { cpf, nome, telefone });
   const resp = await axios.post(url, { cpf, nome, telefone }, { headers: JSON_HEADERS });
   console.log('[createClient] response:', resp.data);
@@ -126,7 +126,7 @@ module.exports = {
     } catch (e) {
       console.error('[registration.awaitExistingCPF] Error:', e?.response?.status, e?.response?.data || e);
       if (e?.response?.status === 404) {
-        await failAndReset(msg, sessions, 'Empresa não encontrada. Verifique o companyId no backend.');
+        await failAndReset(msg, sessions, 'Empresa não encontrada. Verifique a configuração do backend.');
         return;
       }
       await failAndReset(msg, sessions, 'Erro ao verificar cadastro.');
@@ -195,7 +195,7 @@ module.exports = {
     } catch (e) {
       console.error('[registration.awaitName] Error:', e?.response?.status, e?.response?.data || e);
       if (e?.response?.status === 404) {
-        await msg.reply('Empresa/rota não encontrada. Confirme o companyId e a rota no backend.');
+        await msg.reply('Empresa/rota não encontrada. Verifique a configuração do backend.');
       } else if (e?.response?.status === 409) {
         await msg.reply('Cadastro já existente para este CPF.');
       } else if (e?.response?.status === 400) {
