@@ -96,10 +96,19 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
                 return Result.Fail(cpfValido.Errors);
             }
 
+            // Os CPFs são persistidos no banco já sem pontuação, portanto
+            // não é necessário utilizar Replace durante a consulta. A
+            // utilização do Replace no lado do banco pode inclusive impedir
+            // o uso de índices e dificultar a tradução do LINQ para SQL,
+            // resultando em buscas que não retornam registros existentes.
+
+            // Comparamos diretamente o CPF limpo com o valor armazenado,
+            // garantindo que a busca utilize o índice da coluna e encontre
+            // corretamente clientes já cadastrados.
             var cliente = await _context.Cliente
                 .FirstOrDefaultAsync(c =>
                     c.IdEmpresa == IdEmpresa &&
-                    c.Cpf.Replace(".", "").Replace("-", "") == cpfLimpo);
+                    c.Cpf == cpfLimpo);
             if (cliente == null)
             {
                 return Result.Fail($"Não existe cliente de cpf: {cpf}");
