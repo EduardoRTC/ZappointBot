@@ -48,8 +48,5 @@ namespace ZapAgenda_api_aspnet.models
         [Column(TypeName = "varchar(255)")]
         [MaxLength(255, ErrorMessage = "Nome do município não pode ser maior que 255 caracteres")]
         public string NomeMunicipio { get; set; } = null!;
-        public List<Usuario> Usuario { get; set; } = [];
-        public List<Servico> Servico { get; set; } = [];
-        public List<Cliente> Cliente { get; set; } = [];
     }
 }

@@ -87,7 +87,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     TotalAgendamentos = table.Column<int>(type: "int", nullable: false),
                     DataNascimento = table.Column<DateOnly>(type: "date", nullable: true),
-                    IdEmpresa = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
                     Status = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     DataCadastro = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     UltimaModificacao = table.Column<DateTime>(type: "datetime(6)", nullable: false),
@@ -98,12 +97,7 @@ namespace ZapAgenda_api_aspnet.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Cliente", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Cliente_Empresa_IdEmpresa",
-                        column: x => x.IdEmpresa,
-                        principalTable: "Empresa",
-                        principalColumn: "IdEmpresa",
-                        onDelete: ReferentialAction.Cascade);
+                    
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
@@ -117,7 +111,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     Valor = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     TempoDuracao = table.Column<TimeSpan>(type: "time(6)", nullable: false),
-                    IdEmpresa = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
                     Status = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     DataCadastro = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     UltimaModificacao = table.Column<DateTime>(type: "datetime(6)", nullable: false),
@@ -128,12 +121,7 @@ namespace ZapAgenda_api_aspnet.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Servico", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Servico_Empresa_IdEmpresa",
-                        column: x => x.IdEmpresa,
-                        principalTable: "Empresa",
-                        principalColumn: "IdEmpresa",
-                        onDelete: ReferentialAction.Cascade);
+                    
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
@@ -158,7 +146,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                     IdCargo = table.Column<int>(type: "int", nullable: false),
                     Cpf = table.Column<string>(type: "varchar(11)", maxLength: 11, nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    IdEmpresa = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
                     Status = table.Column<int>(type: "int", nullable: false),
                     DataCadastro = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     UltimaModificacao = table.Column<DateTime>(type: "datetime(6)", nullable: false),
@@ -175,12 +162,7 @@ namespace ZapAgenda_api_aspnet.Migrations
                         principalTable: "Cargo",
                         principalColumn: "IdCargo",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Usuario_Empresa_IdEmpresa",
-                        column: x => x.IdEmpresa,
-                        principalTable: "Empresa",
-                        principalColumn: "IdEmpresa",
-                        onDelete: ReferentialAction.Cascade);
+                    
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
@@ -200,7 +182,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                     ValorTotal = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     IdCliente = table.Column<int>(type: "int", nullable: false),
                     IdUsuario = table.Column<int>(type: "int", nullable: false),
-                    IdEmpresa = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
                     Status = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     DataCadastro = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     UltimaModificacao = table.Column<DateTime>(type: "datetime(6)", nullable: false),
@@ -216,12 +197,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                         column: x => x.IdCliente,
                         principalTable: "Cliente",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Agendamento_Empresa_IdEmpresa",
-                        column: x => x.IdEmpresa,
-                        principalTable: "Empresa",
-                        principalColumn: "IdEmpresa",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_Agendamento_Usuario_IdUsuario",
@@ -273,11 +248,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                 column: "IdCliente");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Agendamento_IdEmpresa",
-                table: "Agendamento",
-                column: "IdEmpresa");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Agendamento_IdUsuario",
                 table: "Agendamento",
                 column: "IdUsuario");
@@ -288,24 +258,9 @@ namespace ZapAgenda_api_aspnet.Migrations
                 column: "IdServico");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Cliente_IdEmpresa",
-                table: "Cliente",
-                column: "IdEmpresa");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Servico_IdEmpresa",
-                table: "Servico",
-                column: "IdEmpresa");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Usuario_IdCargo",
                 table: "Usuario",
                 column: "IdCargo");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Usuario_IdEmpresa",
-                table: "Usuario",
-                column: "IdEmpresa");
         }
 
         /// <inheritdoc />

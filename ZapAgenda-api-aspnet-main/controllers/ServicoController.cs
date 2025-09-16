@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using ZapAgenda_api_aspnet.Dtos.Servico;
 using ZapAgenda_api_aspnet.Mappers;
 using ZapAgenda_api_aspnet.repositories.interfaces;
-using ZapAgenda_api_aspnet.helpers;
 
 namespace ZapAgenda_api_aspnet.controllers
 {
@@ -18,7 +17,7 @@ namespace ZapAgenda_api_aspnet.controllers
         [HttpGet("{IdServico}")]
         public async Task<IActionResult> GetById([FromRoute] int IdServico)
         {
-            var servico = await _servicoRepo.GetById(IdServico, EmpresaConfig.DefaultId);
+            var servico = await _servicoRepo.GetByIdAsync(IdServico);
             if (servico.IsFailed)
             {
                 return BadRequest(servico.Errors);
@@ -27,9 +26,9 @@ namespace ZapAgenda_api_aspnet.controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAllByIdEmpresa()
+        public async Task<IActionResult> GetAll()
         {
-            var servicos = await _servicoRepo.GetAllByEmpresa(EmpresaConfig.DefaultId);
+            var servicos = await _servicoRepo.GetAllAsync();
             if (servicos.IsFailed)
             {
                 return BadRequest(servicos.Errors);
@@ -46,7 +45,7 @@ namespace ZapAgenda_api_aspnet.controllers
                 return BadRequest(ModelState);
             }
             var servico = createServicoDto.ToCreateServicoDto();
-            var result = await _servicoRepo.CreateAsync(servico, EmpresaConfig.DefaultId);
+            var result = await _servicoRepo.CreateAsync(servico);
             if (result.IsFailed)
             {
                 return BadRequest(result.Errors);
@@ -61,7 +60,7 @@ namespace ZapAgenda_api_aspnet.controllers
             {
                 return BadRequest(ModelState);
             }
-            var result = await _servicoRepo.UpdateAsync(updateServicoDto, idServico, EmpresaConfig.DefaultId);
+            var result = await _servicoRepo.UpdateAsync(updateServicoDto, idServico);
             if (result.IsFailed)
             {
                 return BadRequest(result.Errors);

@@ -48,9 +48,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                     b.Property<int>("IdCliente")
                         .HasColumnType("int");
 
-                    b.Property<Guid>("IdEmpresa")
-                        .HasColumnType("char(36)");
-
                     b.Property<int>("IdUsuario")
                         .HasColumnType("int");
 
@@ -81,8 +78,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("IdCliente");
-
-                    b.HasIndex("IdEmpresa");
 
                     b.HasIndex("IdUsuario");
 
@@ -169,9 +164,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
 
-                    b.Property<Guid>("IdEmpresa")
-                        .HasColumnType("char(36)");
-
                     b.Property<int>("ModificadoPor")
                         .HasColumnType("int");
 
@@ -198,8 +190,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                         .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("IdEmpresa");
 
                     b.ToTable("Cliente");
                 });
@@ -299,9 +289,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
 
-                    b.Property<Guid>("IdEmpresa")
-                        .HasColumnType("char(36)");
-
                     b.Property<int>("ModificadoPor")
                         .HasColumnType("int");
 
@@ -318,8 +305,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("IdEmpresa");
 
                     b.ToTable("Servico");
                 });
@@ -351,9 +336,6 @@ namespace ZapAgenda_api_aspnet.Migrations
 
                     b.Property<int>("IdCargo")
                         .HasColumnType("int");
-
-                    b.Property<Guid>("IdEmpresa")
-                        .HasColumnType("char(36)");
 
                     b.Property<int>("ModificadoPor")
                         .HasColumnType("int");
@@ -395,8 +377,6 @@ namespace ZapAgenda_api_aspnet.Migrations
 
                     b.HasIndex("IdCargo");
 
-                    b.HasIndex("IdEmpresa");
-
                     b.ToTable("Usuario");
                 });
 
@@ -408,12 +388,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("ZapAgenda_api_aspnet.models.Empresa", "Empresa")
-                        .WithMany()
-                        .HasForeignKey("IdEmpresa")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("ZapAgenda_api_aspnet.models.Usuario", "Usuario")
                         .WithMany()
                         .HasForeignKey("IdUsuario")
@@ -421,8 +395,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                         .IsRequired();
 
                     b.Navigation("Cliente");
-
-                    b.Navigation("Empresa");
 
                     b.Navigation("Usuario");
                 });
@@ -446,28 +418,6 @@ namespace ZapAgenda_api_aspnet.Migrations
                     b.Navigation("Servico");
                 });
 
-            modelBuilder.Entity("ZapAgenda_api_aspnet.models.Cliente", b =>
-                {
-                    b.HasOne("ZapAgenda_api_aspnet.models.Empresa", "Empresa")
-                        .WithMany("Cliente")
-                        .HasForeignKey("IdEmpresa")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Empresa");
-                });
-
-            modelBuilder.Entity("ZapAgenda_api_aspnet.models.Servico", b =>
-                {
-                    b.HasOne("ZapAgenda_api_aspnet.models.Empresa", "Empresa")
-                        .WithMany("Servico")
-                        .HasForeignKey("IdEmpresa")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Empresa");
-                });
-
             modelBuilder.Entity("ZapAgenda_api_aspnet.models.Usuario", b =>
                 {
                     b.HasOne("ZapAgenda_api_aspnet.models.Cargo", "Cargo")
@@ -476,15 +426,7 @@ namespace ZapAgenda_api_aspnet.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("ZapAgenda_api_aspnet.models.Empresa", "Empresa")
-                        .WithMany("Usuario")
-                        .HasForeignKey("IdEmpresa")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.Navigation("Cargo");
-
-                    b.Navigation("Empresa");
                 });
 
             modelBuilder.Entity("ZapAgenda_api_aspnet.models.Agendamento", b =>
@@ -494,15 +436,6 @@ namespace ZapAgenda_api_aspnet.Migrations
 
             modelBuilder.Entity("ZapAgenda_api_aspnet.models.Cargo", b =>
                 {
-                    b.Navigation("Usuario");
-                });
-
-            modelBuilder.Entity("ZapAgenda_api_aspnet.models.Empresa", b =>
-                {
-                    b.Navigation("Cliente");
-
-                    b.Navigation("Servico");
-
                     b.Navigation("Usuario");
                 });
 

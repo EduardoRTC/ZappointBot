@@ -13,9 +13,6 @@ namespace ZapAgenda_api_aspnet.models
         public int Id { get; set; }
 
         [Required]
-        [JsonPropertyOrder(99990)]
-        public Guid IdEmpresa { get; set; }
-        [Required]
         [JsonPropertyOrder(99991)]
         public bool Status { get; set; } = true;
         [Required]

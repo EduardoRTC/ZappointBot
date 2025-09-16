@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Mvc;
 using ZapAgenda_api_aspnet.Dtos.Agendamento;
 using ZapAgenda_api_aspnet.models;
 using ZapAgenda_api_aspnet.repositories.interfaces;
-using ZapAgenda_api_aspnet.helpers;
 
 namespace ZapAgenda_api_aspnet.controllers
 {
@@ -26,7 +25,7 @@ namespace ZapAgenda_api_aspnet.controllers
             {
                 return BadRequest(ModelState);
             }
-            var agendamento = await _agendamentoRepo.CreateAsync(createAgendamentoDto, EmpresaConfig.DefaultId);
+            var agendamento = await _agendamentoRepo.CreateAsync(createAgendamentoDto);
             if (agendamento.IsFailed)
             {
                 return BadRequest(agendamento.Errors);
@@ -37,7 +36,7 @@ namespace ZapAgenda_api_aspnet.controllers
         [HttpGet("{IdAgendamento}")]
         public async Task<IActionResult> GetById([FromRoute] int IdAgendamento)
         {
-            var agendamento = await _agendamentoRepo.GetById(IdAgendamento, EmpresaConfig.DefaultId);
+            var agendamento = await _agendamentoRepo.GetByIdAsync(IdAgendamento);
             if (agendamento.IsFailed)
             {
                 return BadRequest(agendamento.Errors);
@@ -46,10 +45,10 @@ namespace ZapAgenda_api_aspnet.controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAllByIdEmpresa()
+        public async Task<IActionResult> GetAll()
         {
 
-            var agendamento = await _agendamentoRepo.GetAllByEmpresa(EmpresaConfig.DefaultId);
+            var agendamento = await _agendamentoRepo.GetAllAsync();
             if(agendamento.IsFailed) {
                 return NotFound(agendamento.Errors);
             }
@@ -62,7 +61,7 @@ namespace ZapAgenda_api_aspnet.controllers
                 return BadRequest(ModelState);
             }
 
-            var result = await _agendamentoRepo.UpdateAsync(updateAgendamentoDto,IdAgendamento,EmpresaConfig.DefaultId);
+            var result = await _agendamentoRepo.UpdateAsync(updateAgendamentoDto,IdAgendamento);
             if(result.IsFailed) {
                 return BadRequest(result.Errors);
             }

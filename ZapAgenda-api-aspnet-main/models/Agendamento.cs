@@ -24,7 +24,5 @@ namespace ZapAgenda_api_aspnet.models
         public int IdUsuario { get; set; }
         [ForeignKey("IdUsuario")]
         public Usuario Usuario { get; set; } = null!;
-        [ForeignKey("IdEmpresa")]
-        public Empresa Empresa { get; set; } = null!;
     }
 }

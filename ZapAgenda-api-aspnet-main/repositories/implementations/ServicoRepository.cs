@@ -15,39 +15,30 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
             _context = context;
         }
 
-        public async Task<Result<Servico>> CreateAsync(Servico servico, Guid IdEmpresa)
+        public async Task<Result<Servico>> CreateAsync(Servico servico)
         {
-            servico.IdEmpresa = IdEmpresa;
             await _context.AddAsync(servico);
             await _context.SaveChangesAsync();
             return Result.Ok(servico);
         }
 
-        public async Task<Result<List<Servico>>> GetAllByEmpresa(Guid IdEmpresa)
+        public async Task<Result<List<Servico>>> GetAllAsync()
         {
-            var servicos = await _context.Servico.Where(servico => servico.IdEmpresa == IdEmpresa).ToListAsync();
-            if (servicos == null)
-            {
-                return Result.Fail("Servicos estão null");
-            }
+            var servicos = await _context.Servico.ToListAsync();
             return Result.Ok(servicos);
         }
 
-        public async Task<Result<Servico>> GetById(int IdServico, Guid IdEmpresa)
+        public async Task<Result<Servico>> GetByIdAsync(int IdServico)
         {
             var servico = await _context.Servico.FirstOrDefaultAsync(servico => servico.Id == IdServico);
             if (servico == null)
             {
                 return Result.Fail($"Não existe Serviço com id:{IdServico}");
             }
-            if (servico.IdEmpresa != IdEmpresa)
-            {
-                return Result.Fail($"Serviço não pertence a empresa");
-            }
             return Result.Ok(servico);
         }
 
-        public async Task<Result<Servico>> UpdateAsync(UpdateServicoDto updateServicoDto, int IdServico, Guid IdEmpresa)
+        public async Task<Result<Servico>> UpdateAsync(UpdateServicoDto updateServicoDto, int IdServico)
         {
             var servico = await _context.Servico.FindAsync(IdServico);
             if (servico == null)

@@ -3,7 +3,6 @@ using ZapAgenda_api_aspnet.Dtos.Usuario;
 using ZapAgenda_api_aspnet.models;
 using ZapAgenda_api_aspnet.repositories.interfaces;
 using ZapAgenda_api_aspnet.services.interfaces;
-using ZapAgenda_api_aspnet.helpers;
 
 namespace ZapAgenda_api_aspnet.controllers
 {
@@ -24,8 +23,7 @@ namespace ZapAgenda_api_aspnet.controllers
         [HttpPost]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
-            var IdEmpresa = EmpresaConfig.DefaultId;
-            var usuario = await _usuarioRepo.GetUsariosByEmpresaAndNomeUsuario(IdEmpresa, loginDto.NomeUsuario);
+            var usuario = await _usuarioRepo.GetByNomeUsuarioAsync(loginDto.NomeUsuario);
             if (usuario.IsFailed)
             {
                 return NotFound($"Credenciais inválidas");
@@ -47,8 +45,7 @@ namespace ZapAgenda_api_aspnet.controllers
                 IdCargo = usuarioValores.IdCargo,
                 IdUsuario = usuarioValores.IdUsuario,
                 NomeInteiro = usuarioValores.NomeInteiro,
-                NomeUsuario = usuarioValores.NomeUsuario,
-                IdEmpresa = IdEmpresa
+                NomeUsuario = usuarioValores.NomeUsuario
             };
             var token = _tokenService.CreateToken(usuarioDto);
 
