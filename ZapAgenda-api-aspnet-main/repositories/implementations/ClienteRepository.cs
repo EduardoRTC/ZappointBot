@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using ZapAgenda_api_aspnet.data;
 using ZapAgenda_api_aspnet.Dtos.Cliente;
-using ZapAgenda_api_aspnet.helpers;
 using ZapAgenda_api_aspnet.Mappers;
 using ZapAgenda_api_aspnet.models;
 using ZapAgenda_api_aspnet.repositories.generic;
@@ -19,27 +18,29 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
 
         }
 
-        public async Task<List<ClienteDto>> GetAllPorEmpresaAsync(Guid IdEmpresa)
+        public async Task<List<ClienteDto>> GetAllAsyncDetailed()
         {
-            return await _context.Cliente.Where(cliente => cliente.IdEmpresa == IdEmpresa).Select(cliente => cliente.ToClienteDto()).ToListAsync();
+            return await _context.Cliente
+                .Select(cliente => cliente.ToClienteDto())
+                .ToListAsync();
         }
-        public async Task<Result<Cliente>> CreateAsync(Cliente cliente, Guid IdEmpresa)
+
+        public async Task<Result<Cliente>> CreateAsync(Cliente cliente)
         {
             var cpfLimpo = new string(cliente.Cpf.Where(char.IsDigit).ToArray());
-            var IsCpf = VerificaDados.VerificaCpf(cpfLimpo);
-            if (IsCpf.IsFailed)
+            var cpfValido = VerificaDados.VerificaCpf(cpfLimpo);
+            if (cpfValido.IsFailed)
             {
-                return Result.Fail(IsCpf.Errors);
+                return Result.Fail(cpfValido.Errors);
             }
 
-            var clientes = await GetAllPorEmpresaAsync(IdEmpresa);
-            if (clientes.Any(c => c.Cpf == cpfLimpo))
+            var cpfDuplicado = await _context.Cliente.AnyAsync(c => c.Cpf == cpfLimpo);
+            if (cpfDuplicado)
             {
-                return Result.Fail("Já existe Cliente com o mesmo cpf");
+                return Result.Fail("Já existe Cliente com o mesmo CPF");
             }
 
             cliente.Cpf = cpfLimpo;
-            cliente.IdEmpresa = IdEmpresa;
 
             await _context.Cliente.AddAsync(cliente);
             await _context.SaveChangesAsync();
@@ -47,47 +48,41 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
             return Result.Ok(cliente);
         }
 
-        public async Task<Result<Cliente>> UpdateAsync(UpdateClienteDto updateClienteDto, int IdCliente, Guid IdEmpresa)
-        {
-            var cliente = await GetById(IdCliente, IdEmpresa);
-            var clienteValores = cliente.Value;
-            var IsCpf = VerificaDados.VerificaCpf(clienteValores.Cpf);
-            if (IsCpf.IsFailed)
-            {
-                return Result.Fail("Cpf não é valido");
-            }
-            var clientePertenceEmpresa = VerificaEmpresa.PertenceEmpresa(clienteValores.IdEmpresa, IdEmpresa);
-            if (clientePertenceEmpresa.IsFailed)
-            {
-                return Result.Fail("Cliente não pertence a empresa");
-            }
-            clienteValores.Cpf = updateClienteDto.Cpf;
-            clienteValores.Nome = updateClienteDto.Nome;
-            clienteValores.Email = updateClienteDto.Email;
-            clienteValores.DataNascimento = updateClienteDto.DataNascimento;
-            clienteValores.Observacao = updateClienteDto.Observacao;
-            clienteValores.Telefone = updateClienteDto.Telefone;
-            clienteValores.Status = updateClienteDto.Status;
-
-            await _context.SaveChangesAsync();
-            return Result.Ok(clienteValores);
-        }
-
-        public async Task<Result<Cliente>> GetById(int IdCliente, Guid Idempresa)
+        public async Task<Result<Cliente>> UpdateAsync(UpdateClienteDto updateClienteDto, int IdCliente)
         {
             var cliente = await _context.Cliente.FirstOrDefaultAsync(cliente => cliente.Id == IdCliente);
             if (cliente == null)
             {
                 return Result.Fail($"Não existe cliente de id: {IdCliente}");
             }
-            if (cliente.IdEmpresa != Idempresa)
+
+            var cpfLimpo = new string(updateClienteDto.Cpf.Where(char.IsDigit).ToArray());
+            var cpfValidado = VerificaDados.VerificaCpf(cpfLimpo);
+            if (cpfValidado.IsFailed)
             {
-                return Result.Fail("Cliente não pertence a empresa");
+                return Result.Fail(cpfValidado.Errors);
             }
+
+            var existeCpf = await _context.Cliente
+                .AnyAsync(c => c.Id != IdCliente && c.Cpf == cpfLimpo);
+            if (existeCpf)
+            {
+                return Result.Fail("Já existe Cliente com o mesmo CPF");
+            }
+
+            cliente.Cpf = cpfLimpo;
+            cliente.Nome = updateClienteDto.Nome;
+            cliente.Email = updateClienteDto.Email;
+            cliente.DataNascimento = updateClienteDto.DataNascimento;
+            cliente.Observacao = updateClienteDto.Observacao;
+            cliente.Telefone = updateClienteDto.Telefone;
+            cliente.Status = updateClienteDto.Status;
+
+            await _context.SaveChangesAsync();
             return Result.Ok(cliente);
         }
 
-        public async Task<Result<Cliente>> GetByCpfAsync(string cpf, Guid IdEmpresa)
+        public async Task<Result<Cliente>> GetByCpfAsync(string cpf)
         {
             var cpfLimpo = new string(cpf.Where(char.IsDigit).ToArray());
             var cpfValido = VerificaDados.VerificaCpf(cpfLimpo);
@@ -96,19 +91,8 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
                 return Result.Fail(cpfValido.Errors);
             }
 
-            // Os CPFs são persistidos no banco já sem pontuação, portanto
-            // não é necessário utilizar Replace durante a consulta. A
-            // utilização do Replace no lado do banco pode inclusive impedir
-            // o uso de índices e dificultar a tradução do LINQ para SQL,
-            // resultando em buscas que não retornam registros existentes.
-
-            // Comparamos diretamente o CPF limpo com o valor armazenado,
-            // garantindo que a busca utilize o índice da coluna e encontre
-            // corretamente clientes já cadastrados.
             var cliente = await _context.Cliente
-                .FirstOrDefaultAsync(c =>
-                    c.IdEmpresa == IdEmpresa &&
-                    c.Cpf == cpfLimpo);
+                .FirstOrDefaultAsync(c => c.Cpf == cpfLimpo);
             if (cliente == null)
             {
                 return Result.Fail($"Não existe cliente de cpf: {cpf}");

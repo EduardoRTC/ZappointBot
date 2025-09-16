@@ -11,8 +11,6 @@ namespace ZapAgenda_api_aspnet.models
         [MaxLength(50, ErrorMessage = "Nome de usuário não pode ser maior que 50 caracteres")]
         [Column(TypeName = "varchar(50)")]
         public required string NomeUsuario { get; set; }
-        [ForeignKey("IdEmpresa")]
-        public Empresa Empresa { get; set; } = null!;
         public DateTime UltimoLogin { get; set; } = DateTime.UtcNow;
         [MinLength(3)]
         [MaxLength(255, ErrorMessage = "Nome Fantasia não pode ser maior que 255 caracteres")]

@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const { apiBaseUrl, companyId } = require('../config');
+const { apiBaseUrl } = require('../config');
 const { menuText } = require('../utils/messages');
 
 /* ======================= Utils ======================= */
@@ -13,7 +13,7 @@ function joinUrl(...parts) {
     .join('/');
 }
 
-const baseUrl = joinUrl(apiBaseUrl, companyId);
+const baseUrl = apiBaseUrl;
 
 function toIsoDate(dateStr) {
   // aceita "DD/MM/AAAA" ou "D/M/AAAA"

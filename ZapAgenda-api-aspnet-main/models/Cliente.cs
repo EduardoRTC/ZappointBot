@@ -31,7 +31,5 @@ namespace ZapAgenda_api_aspnet.models
         public string Email { get; set; } = string.Empty;
         public int TotalAgendamentos { get; set; }
         public DateOnly? DataNascimento { get; set; }
-        [ForeignKey("IdEmpresa")]
-        public Empresa Empresa { get; set; } = null!;
     }
 }

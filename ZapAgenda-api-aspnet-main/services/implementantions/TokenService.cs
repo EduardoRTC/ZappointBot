@@ -24,7 +24,6 @@ namespace ZapAgenda_api_aspnet.services.implementantions
                 new Claim(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub, usuario.IdUsuario.ToString()),
                 new Claim(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email, usuario.Email ?? string.Empty),
                 new Claim(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.PreferredUsername, usuario.NomeUsuario),
-                new Claim("empresaid", usuario.IdEmpresa.ToString()),
                 new Claim("cargo",usuario.IdCargo.ToString())
             };
             var credential = new SigningCredentials(_key, SecurityAlgorithms.HmacSha256);

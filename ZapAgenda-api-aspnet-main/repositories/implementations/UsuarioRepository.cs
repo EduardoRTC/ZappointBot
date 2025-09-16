@@ -1,8 +1,8 @@
 using FluentResults;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 using ZapAgenda_api_aspnet.data;
 using ZapAgenda_api_aspnet.Dtos.Usuario;
-using ZapAgenda_api_aspnet.helpers;
 using ZapAgenda_api_aspnet.Mappers;
 using ZapAgenda_api_aspnet.models;
 using ZapAgenda_api_aspnet.repositories.generic;
@@ -20,21 +20,18 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
             _criptService = criptService;
         }
 
-        public async Task<Result<List<UsuarioDto>>> GetUsuariosByEmpresa(Guid IdEmpresa)
+        public async Task<Result<List<UsuarioDto>>> GetAllAsyncDetailed()
         {
-            var usuarios = await _context.Usuario.Where(usuario => usuario.IdEmpresa == IdEmpresa).Select(s => s.ToUsuarioDto()).ToListAsync();
-            if (usuarios.Count == 0) { return Result.Fail($"Não existe usuários na empresa de id{IdEmpresa}"); }
+            var usuarios = await _context.Usuario
+                .Select(usuario => usuario.ToUsuarioDto())
+                .ToListAsync();
 
             return Result.Ok(usuarios);
         }
 
-        public async Task<Result<Usuario>> CreateAsync(Usuario usuarioModel, Guid IdEmpresa)
+        public async Task<Result<Usuario>> CreateAsync(Usuario usuarioModel)
         {
-            var usuariosResult = await _context.Usuario
-                .Where(usuario => usuario.IdEmpresa == IdEmpresa)
-                .ToListAsync();
-
-            if (usuariosResult == null) { return Result.Fail($"Erro ao buscar usuários da empresa de id {IdEmpresa}"); }
+            var usuariosResult = await _context.Usuario.ToListAsync();
 
             var nomeUsuarioRepetido = VerificaDados.VerificaUsuario(usuariosResult, usuarioModel);
             if (nomeUsuarioRepetido.IsFailed) { return Result.Fail<Usuario>(nomeUsuarioRepetido.Errors); }
@@ -44,14 +41,16 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
 
             if (!string.IsNullOrEmpty(usuarioModel.Cpf))
             {
-                var IsCpf = VerificaDados.VerificaCpf(usuarioModel.Cpf);
+                var cpfLimpo = new string(usuarioModel.Cpf.Where(char.IsDigit).ToArray());
+                var IsCpf = VerificaDados.VerificaCpf(cpfLimpo);
                 if (!IsCpf.IsSuccess)
                 {
                     return Result.Fail(IsCpf.Errors);
                 }
+
+                usuarioModel.Cpf = cpfLimpo;
             }
 
-            usuarioModel.IdEmpresa = IdEmpresa;
             usuarioModel.Senha = _criptService.HashSenha(usuarioModel.Senha);
 
             await _context.Usuario.AddAsync(usuarioModel);
@@ -60,7 +59,7 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
             return Result.Ok(usuarioModel);
         }
 
-        public async Task<Result<Usuario>> UpdateAsync(UpdateUsuarioDto updateUsuarioDto, int idUsuario, Guid IdEmpresa)
+        public async Task<Result<Usuario>> UpdateAsync(UpdateUsuarioDto updateUsuarioDto, int idUsuario)
         {
             var usuarioModel = await _context.Usuario.FindAsync(idUsuario);
             if (usuarioModel == null)
@@ -68,19 +67,29 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
                 return Result.Fail<Usuario>("Usuário não encontrado.");
             }
 
-            var usuarioPertenceEmpresa = VerificaEmpresa.PertenceEmpresa(usuarioModel.IdEmpresa, IdEmpresa);
-            if (usuarioPertenceEmpresa.IsFailed)
+            var nomeUsuarioDuplicado = await _context.Usuario
+                .AnyAsync(usuario => usuario.Id != idUsuario && usuario.NomeUsuario == updateUsuarioDto.NomeUsuario);
+            if (nomeUsuarioDuplicado)
             {
-                return Result.Fail(usuarioPertenceEmpresa.Errors);
+                return Result.Fail("Não pode ter usuários com o mesmo nome de usuário.");
             }
             usuarioModel.IdCargo = updateUsuarioDto.IdCargo;
 
-            if (!string.IsNullOrEmpty(updateUsuarioDto.Cpf))
+            if (updateUsuarioDto.Cpf != null)
             {
-                var CpfIsValido = VerificaDados.VerificaCpf(updateUsuarioDto.Cpf);
-                if (CpfIsValido.IsFailed)
+                if (string.IsNullOrWhiteSpace(updateUsuarioDto.Cpf))
                 {
-                    return Result.Fail(CpfIsValido.Errors);
+                    usuarioModel.Cpf = null;
+                }
+                else
+                {
+                    var cpfLimpo = new string(updateUsuarioDto.Cpf.Where(char.IsDigit).ToArray());
+                    var CpfIsValido = VerificaDados.VerificaCpf(cpfLimpo);
+                    if (CpfIsValido.IsFailed)
+                    {
+                        return Result.Fail(CpfIsValido.Errors);
+                    }
+                    usuarioModel.Cpf = cpfLimpo;
                 }
             }
 
@@ -94,18 +103,12 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
             return Result.Ok(usuarioModel);
         }
 
-        public async Task<Result<Usuario>> UpdateSenhaAsync(UpdateSenhaUsuarioDto updateSenhaUsuarioDto, int idUsuario, Guid IdEmpresa)
+        public async Task<Result<Usuario>> UpdateSenhaAsync(UpdateSenhaUsuarioDto updateSenhaUsuarioDto, int idUsuario)
         {
             var usuarioModel = await _context.Usuario.FindAsync(idUsuario);
             if (usuarioModel == null)
             {
                 return Result.Fail($"Não existe usuário de id{idUsuario}");
-            }
-
-            var usuarioPertenceEmpresa = VerificaEmpresa.PertenceEmpresa(usuarioModel.IdEmpresa, IdEmpresa);
-            if (usuarioPertenceEmpresa.IsFailed)
-            {
-                return Result.Fail(usuarioPertenceEmpresa.Errors);
             }
 
             var senhaAntigaIsCorreta = _criptService.VerifySenha(updateSenhaUsuarioDto.SenhaAntiga, usuarioModel.Senha);
@@ -127,9 +130,9 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
             return Result.Ok(usuarioModel);
         }
 
-        public async Task<Result<UsuarioComSenhaDto>> GetUsariosByEmpresaAndNomeUsuario(Guid IdEmpresa, string nomeUsuario)
+        public async Task<Result<UsuarioComSenhaDto>> GetByNomeUsuarioAsync(string nomeUsuario)
         {
-            var usuario = await _context.Usuario.FirstOrDefaultAsync(usuario => usuario.NomeUsuario == nomeUsuario && usuario.IdEmpresa == IdEmpresa);
+            var usuario = await _context.Usuario.FirstOrDefaultAsync(usuario => usuario.NomeUsuario == nomeUsuario);
             if (usuario == null)
             {
                 return Result.Fail("Não existe Usuário com esse nome de usuário");
@@ -138,27 +141,12 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
             return Result.Ok(usuarioDto);
         }
 
-        public async Task<Result<Usuario>> GetByIdAsync(int idUsuario, Guid IdEmpresa)
+        public async Task<Result<List<NomeUsuarioDto>>> GetNomeUsuarioDto()
         {
-            var usuario = await _context.Usuario.FirstOrDefaultAsync(usu => usu.Id == idUsuario);
-            if (usuario == null)
-            {
-                return Result.Fail($"Não existe usuário de id: {idUsuario}");
-            }
-            if (usuario.IdEmpresa != IdEmpresa)
-            {
-                return Result.Fail($"Usuario não pertence a empresa");
-            }
-            return Result.Ok(usuario);
-        }
+            var usuarios = await _context.Usuario
+                .Select(usuario => usuario.ToNomeUsuarioDto())
+                .ToListAsync();
 
-        public async Task<Result<List<NomeUsuarioDto>>> GetNomeUsuarioDto(Guid IdEmpresa)
-        {
-            var usuarios = await _context.Usuario.Where(usuario => usuario.IdEmpresa == IdEmpresa).Select(s => s.ToNomeUsuarioDto()).ToListAsync();
-            if (usuarios.Count == 0)
-            {
-                return Result.Fail("Não contém usuários");
-            }
             return Result.Ok(usuarios);
         }
     }
