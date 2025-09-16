@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const { apiBaseUrl } = require('../config');
+const { apiBaseUrl, rawApiBaseUrl, empresaId } = require('../config');
 const {
   menuText,
   startText,
@@ -38,18 +38,56 @@ function hasApiPathSegment(urlLike) {
 }
 
 function buildEndpointVariants(...segments) {
-  const cleaned = segments.filter(Boolean).map(part => String(part));
-  const primary = joinUrl(apiBaseUrl, ...cleaned);
-  const variants = [primary];
+  const cleaned = segments
+    .filter(Boolean)
+    .map(part => String(part).replace(/^\/+|\/+$/g, ''));
 
-  if (!hasApiPathSegment(apiBaseUrl)) {
-    const fallback = joinUrl(apiBaseUrl, 'api', ...cleaned);
-    if (!variants.includes(fallback)) {
-      variants.push(fallback);
-    }
+  const baseUrl = rawApiBaseUrl || apiBaseUrl;
+  const variants = new Set();
+  const baseHasApi = hasApiPathSegment(baseUrl);
+
+  const segmentVariants = [cleaned];
+  if (empresaId) {
+    segmentVariants.push([empresaId, ...cleaned]);
   }
 
-  return variants;
+  segmentVariants.forEach(parts => {
+    if (parts.length === 0) return;
+    variants.add(joinUrl(baseUrl, ...parts));
+    if (!baseHasApi) {
+      variants.add(joinUrl(baseUrl, 'api', ...parts));
+    }
+  });
+
+  return Array.from(variants);
+}
+
+function isEmpresaRelatedError(payload, seen = new Set()) {
+  if (!payload) return false;
+
+  if (typeof payload === 'string') {
+    return payload.toLowerCase().includes('empresa');
+  }
+
+  if (typeof payload !== 'object') {
+    return false;
+  }
+
+  if (seen.has(payload)) {
+    return false;
+  }
+
+  seen.add(payload);
+
+  if (Array.isArray(payload)) {
+    return payload.some(item => isEmpresaRelatedError(item, seen));
+  }
+
+  if (Object.keys(payload).some(key => key.toLowerCase().includes('empresa'))) {
+    return true;
+  }
+
+  return Object.values(payload).some(value => isEmpresaRelatedError(value, seen));
 }
 
 function sanitizeCPF(text) {
@@ -84,11 +122,23 @@ async function findClientByCPF(cpf) {
       return normalized;
     } catch (e) {
       const status = e?.response?.status;
-      console.error(`[findClientByCPF] error on attempt ${attemptLabel}:`, status, e?.response?.data || e);
+      const data = e?.response?.data;
+      const empresaIssue = isEmpresaRelatedError(data);
+      console.error(`[findClientByCPF] error on attempt ${attemptLabel}:`, status, data || e);
+
+      if (empresaIssue && i < urls.length - 1) {
+        console.log('[findClientByCPF] empresa related error, trying fallback path');
+        continue;
+      }
 
       if (status === 404 && i < urls.length - 1) {
         console.log('[findClientByCPF] endpoint returned 404, trying fallback path');
         continue;
+      }
+
+      if (empresaIssue) {
+        e.isEmpresaIssue = true;
+        throw e;
       }
 
       if (status === 400 || status === 404) {
@@ -117,11 +167,17 @@ async function createClient({ cpf, nome, telefone }) {
       return resp.data;
     } catch (e) {
       const status = e?.response?.status;
-      console.error(`[createClient] error on attempt ${attemptLabel}:`, status, e?.response?.data || e);
+      const data = e?.response?.data;
+      const empresaIssue = isEmpresaRelatedError(data);
+      console.error(`[createClient] error on attempt ${attemptLabel}:`, status, data || e);
 
-      if (status === 404 && i < urls.length - 1) {
-        console.log('[createClient] endpoint returned 404, trying fallback path');
+      if ((status === 404 || empresaIssue) && i < urls.length - 1) {
+        console.log('[createClient] fallback triggered due to', empresaIssue ? 'empresa related error' : '404', 'trying alternate path');
         continue;
+      }
+
+      if (empresaIssue) {
+        e.isEmpresaIssue = true;
       }
 
       throw e;
@@ -187,6 +243,10 @@ module.exports = {
       }
     } catch (e) {
       console.error('[registration.awaitExistingCPF] Error:', e?.response?.status, e?.response?.data || e);
+      if (e.isEmpresaIssue || isEmpresaRelatedError(e?.response?.data)) {
+        await failAndReset(msg, sessions, 'Não foi possível identificar a empresa configurada. Verifique a variável EMPRESA_ID.');
+        return;
+      }
       if (e?.response?.status === 404) {
         await failAndReset(msg, sessions, 'Registro não encontrado. Verifique se o backend está acessível.');
         return;
@@ -256,7 +316,9 @@ module.exports = {
       await msg.reply('Ok, pré-cadastro realizado com sucesso!\n' + menuText());
     } catch (e) {
       console.error('[registration.awaitName] Error:', e?.response?.status, e?.response?.data || e);
-      if (e?.response?.status === 404) {
+      if (e.isEmpresaIssue || isEmpresaRelatedError(e?.response?.data)) {
+        await msg.reply('Não foi possível localizar a empresa configurada. Verifique a variável EMPRESA_ID.');
+      } else if (e?.response?.status === 404) {
         await msg.reply('Rota não encontrada no backend. Confirme se o serviço está disponível.');
       } else if (e?.response?.status === 409) {
         await msg.reply('Cadastro já existente para este CPF.');

@@ -17,6 +17,10 @@ Bot de WhatsApp utilizando [whatsapp-web.js](https://github.com/pedroslopez/what
    ```bash
    export API_BASE_URL="http://localhost:3000"
    ```
+4. Caso o backend exija segmentação por empresa na rota, defina a variável `EMPRESA_ID` com o identificador utilizado na API (por exemplo, o GUID da empresa):
+   ```bash
+   export EMPRESA_ID="00000000-0000-0000-0000-000000000000"
+   ```
 
 ## Uso
 1. Inicie o bot:
