@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const { apiBaseUrl, companyId } = require('../config');
+const { apiBaseUrl, companyId, cpfTenantId } = require('../config');
 const {
   menuText,
   startText,
@@ -35,11 +35,11 @@ function normalizeClient(data) {
   return data;
 }
 
-/** GET /{companyId}/cliente/by-cpf?cpf=... → objeto ou null */
+/** GET /{cpfTenantId}/cliente/by-cpf?cpf=... → objeto ou null */
 async function findClientByCPF(cpf) {
-  const url = joinUrl(apiBaseUrl, companyId, 'cliente', 'by-cpf');
+  const url = joinUrl(apiBaseUrl, cpfTenantId, 'cliente', 'by-cpf');
   const clean = sanitizeCPF(cpf);
-  console.log('[findClientByCPF] url:', url, 'cpf:', clean);
+  console.log('[findClientByCPF] url:', url, 'tenant:', cpfTenantId, 'cpf:', clean);
   try {
     // Garante que o CPF enviado esteja apenas com números
     const resp = await axios.get(url, { params: { cpf: clean } });
