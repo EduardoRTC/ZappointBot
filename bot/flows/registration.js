@@ -19,6 +19,39 @@ function joinUrl(...parts) {
     .join('/');
 }
 
+function hasApiPathSegment(urlLike) {
+  try {
+    const parsed = new URL(String(urlLike));
+    return parsed.pathname
+      .split('/')
+      .filter(Boolean)
+      .some(segment => segment.toLowerCase() === 'api');
+  } catch {
+    const path = String(urlLike || '')
+      .split('?')[0]
+      .split('#')[0];
+    return path
+      .split('/')
+      .filter(Boolean)
+      .some(segment => segment.toLowerCase() === 'api');
+  }
+}
+
+function buildEndpointVariants(...segments) {
+  const cleaned = segments.filter(Boolean).map(part => String(part));
+  const primary = joinUrl(apiBaseUrl, ...cleaned);
+  const variants = [primary];
+
+  if (!hasApiPathSegment(apiBaseUrl)) {
+    const fallback = joinUrl(apiBaseUrl, 'api', ...cleaned);
+    if (!variants.includes(fallback)) {
+      variants.push(fallback);
+    }
+  }
+
+  return variants;
+}
+
 function sanitizeCPF(text) {
   if (!text) return '';
   return String(text).replace(/\D/g, '');
@@ -37,34 +70,63 @@ function normalizeClient(data) {
 
 /** GET /cliente/by-cpf?cpf=... → objeto ou null */
 async function findClientByCPF(cpf) {
-  const url = joinUrl(apiBaseUrl, 'cliente', 'by-cpf');
   const clean = sanitizeCPF(cpf);
-  console.log('[findClientByCPF] url:', url, 'cpf:', clean);
-  try {
-    // Garante que o CPF enviado esteja apenas com números
-    const resp = await axios.get(url, { params: { cpf: clean } });
-    const normalized = normalizeClient(resp.data);
-    console.log('[findClientByCPF] response:', normalized);
-    return normalized;
-  } catch (e) {
-    const status = e?.response?.status;
-    console.error('[findClientByCPF] error:', status, e?.response?.data || e);
-    // Quando o backend retorna 400 ou 404 significa que o CPF não foi localizado
-    if (status === 400 || status === 404) {
-      console.log('[findClientByCPF] CPF não encontrado:', clean);
-      return null;
+  const urls = buildEndpointVariants('cliente', 'by-cpf');
+
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    const attemptLabel = `${i + 1}/${urls.length}`;
+    console.log(`[findClientByCPF] attempt ${attemptLabel} url:`, url, 'cpf:', clean);
+    try {
+      const resp = await axios.get(url, { params: { cpf: clean } });
+      const normalized = normalizeClient(resp.data);
+      console.log('[findClientByCPF] response:', normalized);
+      return normalized;
+    } catch (e) {
+      const status = e?.response?.status;
+      console.error(`[findClientByCPF] error on attempt ${attemptLabel}:`, status, e?.response?.data || e);
+
+      if (status === 404 && i < urls.length - 1) {
+        console.log('[findClientByCPF] endpoint returned 404, trying fallback path');
+        continue;
+      }
+
+      if (status === 400 || status === 404) {
+        console.log('[findClientByCPF] CPF não encontrado:', clean);
+        return null;
+      }
+
+      throw e;
     }
-    throw e; // outros códigos de status devem ser tratados pelo chamador
   }
+
+  return null;
 }
 
 /** POST /cliente → cria e retorna o cliente */
 async function createClient({ cpf, nome, telefone }) {
-  const url = joinUrl(apiBaseUrl, 'cliente');
-  console.log('[createClient] url:', url, 'payload:', { cpf, nome, telefone });
-  const resp = await axios.post(url, { cpf, nome, telefone }, { headers: JSON_HEADERS });
-  console.log('[createClient] response:', resp.data);
-  return resp.data;
+  const urls = buildEndpointVariants('cliente');
+
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    const attemptLabel = `${i + 1}/${urls.length}`;
+    console.log(`[createClient] attempt ${attemptLabel} url:`, url, 'payload:', { cpf, nome, telefone });
+    try {
+      const resp = await axios.post(url, { cpf, nome, telefone }, { headers: JSON_HEADERS });
+      console.log('[createClient] response:', resp.data);
+      return resp.data;
+    } catch (e) {
+      const status = e?.response?.status;
+      console.error(`[createClient] error on attempt ${attemptLabel}:`, status, e?.response?.data || e);
+
+      if (status === 404 && i < urls.length - 1) {
+        console.log('[createClient] endpoint returned 404, trying fallback path');
+        continue;
+      }
+
+      throw e;
+    }
+  }
 }
 
 async function failAndReset(msg, sessions, text = 'Ocorreu um erro. Tente novamente mais tarde.') {
