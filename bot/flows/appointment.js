@@ -26,17 +26,59 @@ function toIsoDate(dateStr) {
   return `${y}-${mon}-${day}`;
 }
 
+function pickProp(obj, ...keys) {
+  if (!obj || typeof obj !== 'object') return undefined;
+  for (const key of keys) {
+    if (!key) continue;
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      return obj[key];
+    }
+    const lower = key.toString().toLowerCase();
+    for (const existing of Object.keys(obj)) {
+      if (existing.toLowerCase() === lower) {
+        return obj[existing];
+      }
+    }
+  }
+  return undefined;
+}
+
 function normalizeList(maybeList) {
   if (typeof maybeList === 'string') {
     try { maybeList = JSON.parse(maybeList); } catch { return []; }
   }
   if (Array.isArray(maybeList)) return maybeList;
-  if (maybeList && typeof maybeList === 'object') {
-    if ('value' in maybeList) return normalizeList(maybeList.value);
-    if ('data' in maybeList) return normalizeList(maybeList.data);
-    return Object.values(maybeList);
+  if (!maybeList || typeof maybeList !== 'object') return [];
+
+  const nested = pickProp(maybeList, 'value', 'values', 'data', 'items', 'itens', 'result', 'results', 'lista');
+  if (nested !== undefined && nested !== maybeList) {
+    const normalized = normalizeList(nested);
+    if (normalized.length) return normalized;
+    if (Array.isArray(nested)) return nested;
   }
-  return [];
+
+  if (typeof maybeList.length === 'number' && maybeList.length >= 0) {
+    try { return Array.from(maybeList); } catch {}
+  }
+
+  const keys = Object.keys(maybeList);
+  const numericKeys = keys.filter(key => /^\d+$/.test(key));
+  if (numericKeys.length && numericKeys.length === keys.length) {
+    return numericKeys
+      .sort((a, b) => Number(a) - Number(b))
+      .map(key => maybeList[key]);
+  }
+
+  const aggregated = [];
+  for (const value of Object.values(maybeList)) {
+    if (!value || typeof value !== 'object') continue;
+    const normalized = normalizeList(value);
+    if (normalized.length) {
+      aggregated.push(...normalized);
+    }
+  }
+
+  return aggregated;
 }
 
 function parseChoice(text) {

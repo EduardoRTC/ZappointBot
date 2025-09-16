@@ -51,12 +51,37 @@ function normalizeList(maybeList) {
   if (typeof maybeList === 'string') {
     try { return normalizeList(JSON.parse(maybeList)); } catch { return []; }
   }
-  if (typeof maybeList === 'object') {
-    if ('value' in maybeList) return normalizeList(maybeList.value);
-    if ('data' in maybeList) return normalizeList(maybeList.data);
-    return Object.values(maybeList);
+  if (typeof maybeList !== 'object') return [];
+
+  const nested = getProp(maybeList, 'value', 'values', 'data', 'items', 'itens', 'result', 'results', 'lista');
+  if (nested !== undefined && nested !== maybeList) {
+    const normalized = normalizeList(nested);
+    if (normalized.length) return normalized;
+    if (Array.isArray(nested)) return nested;
   }
-  return [];
+
+  if (typeof maybeList.length === 'number' && maybeList.length >= 0) {
+    try { return Array.from(maybeList); } catch {}
+  }
+
+  const keys = Object.keys(maybeList);
+  const numericKeys = keys.filter(key => /^\d+$/.test(key));
+  if (numericKeys.length && numericKeys.length === keys.length) {
+    return numericKeys
+      .sort((a, b) => Number(a) - Number(b))
+      .map(key => maybeList[key]);
+  }
+
+  const aggregated = [];
+  for (const value of Object.values(maybeList)) {
+    if (!value || typeof value !== 'object') continue;
+    const normalized = normalizeList(value);
+    if (normalized.length) {
+      aggregated.push(...normalized);
+    }
+  }
+
+  return aggregated;
 }
 
 function toNumber(value, fallback = undefined) {
