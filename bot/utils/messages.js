@@ -3,7 +3,7 @@ function startText() {
 }
 
 function menuText() {
-  return 'O que gostaria de fazer hoje?\n1 - Agendar horário\n2 - Confirmar agendamento\n3 - Cancelar agendamento\n4 - Conferir meus agendamentos\n0 - Voltar';
+  return 'O que gostaria de fazer hoje?\n1 - Agendar horário\n2 - Cancelar agendamento\n3 - Conferir meus agendamentos\n0 - Voltar';
 }
 
 function serviceText() {
