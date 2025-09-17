@@ -716,7 +716,14 @@ async function awaitExistingCPF(session, msg, text, sessions) {
     if (client) {
       session.tempClient = client;
       session.step = 'confirmClient';
-      await msg.reply(`Encontramos seu cadastro: ${client.nome}.\n1 - Sim, sou eu\n0 - Voltar`);
+      const clientName =
+        getProp(client, 'nome', 'nomeInteiro', 'nomeCompleto', 'nomeCliente', 'Nome', 'NomeCompleto', 'NomeCliente') ||
+        'cliente';
+      const trimmedName = String(clientName).trim();
+      const greetingName = trimmedName.length ? trimmedName : 'cliente';
+      await msg.reply(
+        `Olá ${greetingName}! Encontramos seu cadastro.\n1 - Sim, sou eu\n0 - Voltar`
+      );
     } else {
       session.step = 'awaitCPF';
       await msg.reply(
