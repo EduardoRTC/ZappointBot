@@ -10,22 +10,16 @@ const {
   awaitExistingCPF,
   awaitCPF,
   awaitName,
-  confirmClient
-} = require('./flows/registration');
-
-const {
+  confirmClient,
   mainMenu,
   confirmExisting,
-  cancelExisting
-} = require('./flows/menu');
-
-const {
+  cancelExisting,
   service,
   professional,
   date,
   time,
   confirmAppointment
-} = require('./flows/appointment');
+} = require('./flows/conversation');
 
 const { startText } = require('./utils/messages');
 
