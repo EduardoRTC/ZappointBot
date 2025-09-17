@@ -593,7 +593,14 @@ async function fetchAppointmentById(id) {
   try {
     const url = joinUrl(companyBaseUrl, 'agendamento', String(id));
     const resp = await axios.get(url);
-    return resp.data;
+    const payload = resp.data;
+    if (payload && typeof payload === 'object') {
+      const nested = getProp(payload, 'data', 'Data', 'resultado', 'Resultado', 'agendamento', 'Agendamento');
+      if (nested && typeof nested === 'object') {
+        return nested;
+      }
+    }
+    return payload;
   } catch (err) {
     console.error('[menu.fetchAppointmentById] erro ao buscar agendamento:', err?.response?.status, err?.response?.data || err.message);
     return null;
@@ -642,7 +649,34 @@ function buildUpdatePayload(app, newStatus) {
   const id = normalizeId(app.id);
   if (!id) throw new Error('Agendamento sem identificador.');
 
-  const serviceIds = Array.isArray(app.serviceIds) ? app.serviceIds.filter(Number.isFinite) : [];
+  let serviceIds = [];
+  if (Array.isArray(app.serviceIds)) {
+    serviceIds = app.serviceIds
+      .map(value => {
+        if (Number.isFinite(value)) return Number(value);
+        const parsed = Number(String(value).trim());
+        return Number.isFinite(parsed) ? parsed : null;
+      })
+      .filter(Number.isFinite);
+  }
+
+  if ((!serviceIds || !serviceIds.length) && app.raw) {
+    try {
+      const info = extractServiceInfo(app.raw);
+      serviceIds = Array.isArray(info?.ids)
+        ? info.ids
+            .map(value => {
+              if (Number.isFinite(value)) return Number(value);
+              const parsed = Number(String(value).trim());
+              return Number.isFinite(parsed) ? parsed : null;
+            })
+            .filter(Number.isFinite)
+        : [];
+    } catch (err) {
+      console.error('[menu.buildUpdatePayload] erro ao extrair serviços do agendamento:', err?.message || err);
+    }
+  }
+
   if (!serviceIds.length) {
     throw new Error('Serviços do agendamento não encontrados.');
   }
@@ -921,25 +955,6 @@ async function mainMenu(session, msg, text) {
 
   if (text === '2') {
     try {
-      const appointments = await loadAppointmentsForClient(session, 'pending');
-      session.appointments = appointments;
-      if (!appointments.length) {
-        await msg.reply('Você não possui agendamentos pendentes de confirmação.');
-        await msg.reply(menuText());
-        return;
-      }
-      session.step = 'confirmExisting';
-      await msg.reply(buildAppointmentPrompt('Qual agendamento deseja confirmar?', appointments));
-    } catch (err) {
-      console.error('[menu.mainMenu -> pending] erro ao buscar agendamentos:', err?.response?.status, err?.response?.data || err.message);
-      await msg.reply('Não consegui carregar seus agendamentos pendentes agora.');
-      await msg.reply(menuText());
-    }
-    return;
-  }
-
-  if (text === '3') {
-    try {
       const appointments = await loadAppointmentsForClient(session, 'cancelable');
       session.appointments = appointments;
       if (!appointments.length) {
@@ -957,7 +972,7 @@ async function mainMenu(session, msg, text) {
     return;
   }
 
-  if (text === '4') {
+  if (text === '3') {
     try {
       const appointments = await loadAppointmentsForClient(session, 'future');
       if (!appointments.length) {
