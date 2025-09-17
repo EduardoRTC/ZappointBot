@@ -174,7 +174,20 @@ function extractServiceInfo(raw) {
   const directNames = getProp(raw, 'services', 'Services', 'servicos', 'Servicos');
   if (Array.isArray(directNames)) {
     directNames.forEach(n => {
-      if (hasValue(n)) names.add(String(n).trim());
+      if (!hasValue(n)) return;
+      if (typeof n === 'object') {
+        const id = getProp(n, 'id', 'Id', 'idServico', 'IdServico', 'servicoId', 'ServicoId');
+        if (hasValue(id)) {
+          const parsed = Number(String(id).trim());
+          if (Number.isFinite(parsed)) ids.add(parsed);
+        }
+        const nomeServico = getProp(n, 'descricao', 'Descricao', 'nome', 'Nome');
+        if (hasValue(nomeServico)) {
+          names.add(String(nomeServico).trim());
+        }
+        return;
+      }
+      names.add(String(n).trim());
     });
   } else if (typeof directNames === 'string') {
     const text = directNames.trim();
@@ -196,6 +209,37 @@ function extractServiceInfo(raw) {
     }
   }
 
+  const servicosDetalhados = normalizeList(getProp(
+    raw,
+    'servicosAgendamento',
+    'ServicosAgendamento',
+    'servicosDetalhes',
+    'ServicosDetalhes',
+    'servicosDetalhados',
+    'ServicosDetalhados'
+  ));
+  servicosDetalhados.forEach(item => {
+    if (!item || typeof item !== 'object') return;
+    const idServicoItem = getProp(item, 'id', 'Id', 'idServico', 'IdServico', 'servicoId', 'ServicoId');
+    if (hasValue(idServicoItem)) {
+      const parsed = Number(String(idServicoItem).trim());
+      if (Number.isFinite(parsed)) ids.add(parsed);
+    }
+    const nomeItem = getProp(item, 'descricao', 'Descricao', 'nome', 'Nome');
+    if (hasValue(nomeItem)) names.add(String(nomeItem).trim());
+
+    const servicoNested = getProp(item, 'servico', 'Servico');
+    if (servicoNested && typeof servicoNested === 'object') {
+      const nestedId = getProp(servicoNested, 'id', 'Id', 'idServico', 'IdServico');
+      if (hasValue(nestedId)) {
+        const parsedId = Number(String(nestedId).trim());
+        if (Number.isFinite(parsedId)) ids.add(parsedId);
+      }
+      const nestedName = getProp(servicoNested, 'descricao', 'Descricao', 'nome', 'Nome');
+      if (hasValue(nestedName)) names.add(String(nestedName).trim());
+    }
+  });
+
   const agServ = getProp(raw, 'agendamentoServico', 'AgendamentoServico');
   if (Array.isArray(agServ)) {
     agServ.forEach(item => {
@@ -211,6 +255,26 @@ function extractServiceInfo(raw) {
       }
     });
   }
+
+  const agServPlural = normalizeList(getProp(raw, 'agendamentoServicos', 'AgendamentoServicos'));
+  agServPlural.forEach(item => {
+    if (!item || typeof item !== 'object') return;
+    const idServico = getProp(item, 'idServico', 'IdServico', 'servicoId', 'ServicoId', 'id');
+    if (hasValue(idServico)) {
+      const parsed = Number(String(idServico).trim());
+      if (Number.isFinite(parsed)) ids.add(parsed);
+    }
+    const servico = getProp(item, 'servico', 'Servico');
+    if (servico && typeof servico === 'object') {
+      const nomeServico = getProp(servico, 'descricao', 'Descricao', 'nome', 'Nome');
+      if (hasValue(nomeServico)) names.add(String(nomeServico).trim());
+      const nestedId = getProp(servico, 'id', 'Id');
+      if (hasValue(nestedId)) {
+        const parsedId = Number(String(nestedId).trim());
+        if (Number.isFinite(parsedId)) ids.add(parsedId);
+      }
+    }
+  });
 
   const idServico = getProp(raw, 'idServico', 'IdServico');
   if (Array.isArray(idServico)) {
