@@ -1,5 +1,5 @@
 function startText() {
-  return 'Seja bem-vindo(a), esse número ainda não possui cadastro, você já é cliente?\n1 - Sim\n2 - Não';
+  return 'Seja bem-vindo(a), você já é cliente?\n1 - Sim\n2 - Não';
 }
 
 function menuText() {

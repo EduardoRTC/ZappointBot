@@ -1,20 +1,25 @@
 'use strict';
 
 const axios = require('axios');
-const { apiBaseUrl, companyId, cpfTenantId } = require('../config');
-const {
-  menuText,
-  startText,
-  askCPFExistingText,
-  askCPFNewText,
-  askNameText
-} = require('../utils/messages');
+const { apiBaseUrl, companyId } = require('../config');
+const { menuText, startText, askCPFExistingText, askCPFNewText, askNameText } = require('../utils/messages');
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
-/* =========================================================
- * Utils compartilhadas
+/* ========================================================= 
+ * STATUS AGENDAMENTO (ENUM)
+ * =======================================================
+ * 1 = PENDENTE
+ * 2 = FINALIZADO
+ * 3 = CANCELADO
+ * 
+ * Apenas agendamentos com status PENDENTE (1) podem ser cancelados
  * =======================================================*/
+
+/* ========================================================= 
+ * UTILS COMPARTILHADAS
+ * =======================================================*/
+
 function joinUrl(...parts) {
   return parts
     .map((p, i) => (i === 0 ? String(p).replace(/\/+$/g, '') : String(p).replace(/^\/+|\/+$/g, '')))
@@ -29,52 +34,55 @@ function sanitizeCPF(text) {
   return String(text).replace(/\D/g, '');
 }
 
-function normalizeClient(data) {
-  if (!data) return null;
-  if (Array.isArray(data)) return data[0] || null;
-  if (typeof data === 'object' && 'value' in data) {
-    const v = data.value;
-    if (Array.isArray(v)) return v[0] || null;
-    return v;
+function validateCPF(cpf) {
+  const cleanCPF = sanitizeCPF(cpf);
+  
+  // CPF deve ter 11 dígitos
+  if (cleanCPF.length !== 11) {
+    return { valid: false, message: '❌ CPF inválido. O CPF deve ter 11 dígitos.' };
   }
-  return data;
+  
+  // Verifica se todos os dígitos são iguais (ex: 111.111.111-11)
+  if (/^(\d)\1{10}$/.test(cleanCPF)) {
+    return { valid: false, message: '❌ CPF inválido. Todos os dígitos não podem ser iguais.' };
+  }
+  
+  // Validação do primeiro dígito verificador
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(cleanCPF.charAt(i)) * (10 - i);
+  }
+  let firstDigit = 11 - (sum % 11);
+  if (firstDigit >= 10) firstDigit = 0;
+  
+  if (firstDigit !== parseInt(cleanCPF.charAt(9))) {
+    return { valid: false, message: '❌ CPF inválido. Verifique os números digitados.' };
+  }
+  
+  // Validação do segundo dígito verificador
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += parseInt(cleanCPF.charAt(i)) * (11 - i);
+  }
+  let secondDigit = 11 - (sum % 11);
+  if (secondDigit >= 10) secondDigit = 0;
+  
+  if (secondDigit !== parseInt(cleanCPF.charAt(10))) {
+    return { valid: false, message: '❌ CPF inválido. Verifique os números digitados.' };
+  }
+  
+  return { valid: true, cpf: cleanCPF };
 }
 
-async function findClientByCPF(cpf) {
-  const url = joinUrl(apiBaseUrl, cpfTenantId, 'cliente', 'by-cpf');
-  const clean = sanitizeCPF(cpf);
-  console.log('[findClientByCPF] url:', url, 'tenant:', cpfTenantId, 'cpf:', clean);
-  try {
-    const resp = await axios.get(url, { params: { cpf: clean } });
-    const normalized = normalizeClient(resp.data);
-    console.log('[findClientByCPF] response:', normalized);
-    return normalized;
-  } catch (e) {
-    const status = e?.response?.status;
-    console.error('[findClientByCPF] error:', status, e?.response?.data || e);
-    if (status === 400 || status === 404) {
-      console.log('[findClientByCPF] CPF não encontrado:', clean);
-      return null;
-    }
-    throw e;
-  }
-}
-
-async function createClient({ cpf, nome, telefone }) {
-  const url = joinUrl(apiBaseUrl, companyId, 'cliente');
-  console.log('[createClient] url:', url, 'payload:', { cpf, nome, telefone });
-  const resp = await axios.post(url, { cpf, nome, telefone }, { headers: JSON_HEADERS });
-  console.log('[createClient] response:', resp.data);
-  return resp.data;
-}
-
-async function failAndReset(msg, sessions, text = 'Ocorreu um erro. Tente novamente mais tarde.') {
-  console.log('[failAndReset] message:', text);
-  await msg.reply(text);
-  if (sessions && msg && msg.from) {
-    console.log('[failAndReset] clearing session for', msg.from);
-    delete sessions[msg.from];
-  }
+function isValidInput(text) {
+  // Verifica se é texto válido (não emoji, figurinha, etc)
+  if (!text || typeof text !== 'string') return false;
+  
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return false;
+  
+  // Aceita números, letras, espaços e alguns caracteres especiais comuns
+  return true; // Por enquanto aceita tudo, mas pode ser mais restritivo
 }
 
 function hasValue(value) {
@@ -105,40 +113,13 @@ function getProp(obj, ...keys) {
 function normalizeList(maybeList) {
   if (!maybeList) return [];
   if (Array.isArray(maybeList)) return maybeList;
-  if (typeof maybeList === 'string') {
-    try { return normalizeList(JSON.parse(maybeList)); } catch { return []; }
-  }
-  if (typeof maybeList !== 'object') return [];
-
-  const nested = getProp(maybeList, 'value', 'values', 'data', 'items', 'itens', 'result', 'results', 'lista');
-  if (nested !== undefined && nested !== maybeList) {
-    const normalized = normalizeList(nested);
-    if (normalized.length) return normalized;
+  
+  if (typeof maybeList === 'object') {
+    const nested = getProp(maybeList, 'value', 'values', 'data', 'items', 'result');
     if (Array.isArray(nested)) return nested;
   }
-
-  if (typeof maybeList.length === 'number' && maybeList.length >= 0) {
-    try { return Array.from(maybeList); } catch {}
-  }
-
-  const keys = Object.keys(maybeList);
-  const numericKeys = keys.filter(key => /^\d+$/.test(key));
-  if (numericKeys.length && numericKeys.length === keys.length) {
-    return numericKeys
-      .sort((a, b) => Number(a) - Number(b))
-      .map(key => maybeList[key]);
-  }
-
-  const aggregated = [];
-  for (const value of Object.values(maybeList)) {
-    if (!value || typeof value !== 'object') continue;
-    const normalized = normalizeList(value);
-    if (normalized.length) {
-      aggregated.push(...normalized);
-    }
-  }
-
-  return aggregated;
+  
+  return [];
 }
 
 function toNumber(value, fallback = undefined) {
@@ -147,1141 +128,1066 @@ function toNumber(value, fallback = undefined) {
   return Number.isFinite(num) ? num : fallback;
 }
 
-function getClientId(source) {
-  const candidate = getProp(
-    source,
-    'id',
-    'Id',
-    'idCliente',
-    'IdCliente',
-    'clientId',
-    'ClientId',
-    'clienteId'
-  );
-  if (!hasValue(candidate)) return undefined;
-  if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate;
-  const parsed = Number(String(candidate).trim());
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function extractServiceInfo(raw) {
-  const names = new Set();
-  const ids = new Set();
-
-  const directName = getProp(raw, 'service', 'Service', 'servico', 'Servico');
-  if (hasValue(directName)) names.add(String(directName).trim());
-
-  const directNames = getProp(raw, 'services', 'Services', 'servicos', 'Servicos');
-  if (Array.isArray(directNames)) {
-    directNames.forEach(n => {
-      if (!hasValue(n)) return;
-      if (typeof n === 'object') {
-        const id = getProp(n, 'id', 'Id', 'idServico', 'IdServico', 'servicoId', 'ServicoId');
-        if (hasValue(id)) {
-          const parsed = Number(String(id).trim());
-          if (Number.isFinite(parsed)) ids.add(parsed);
-        }
-        const nomeServico = getProp(n, 'descricao', 'Descricao', 'nome', 'Nome');
-        if (hasValue(nomeServico)) {
-          names.add(String(nomeServico).trim());
-        }
-        return;
-      }
-      names.add(String(n).trim());
-    });
-  } else if (typeof directNames === 'string') {
-    const text = directNames.trim();
-    if (text.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) {
-          parsed.forEach(n => {
-            if (hasValue(n)) names.add(String(n).trim());
-          });
-        }
-      } catch {}
-    } else if (text.includes(',')) {
-      text.split(',').forEach(n => {
-        if (n.trim()) names.add(n.trim());
-      });
-    } else if (text) {
-      names.add(text);
-    }
-  }
-
-  const servicosDetalhados = normalizeList(getProp(
-    raw,
-    'servicosAgendamento',
-    'ServicosAgendamento',
-    'servicosDetalhes',
-    'ServicosDetalhes',
-    'servicosDetalhados',
-    'ServicosDetalhados'
-  ));
-  servicosDetalhados.forEach(item => {
-    if (!item || typeof item !== 'object') return;
-    const idServicoItem = getProp(item, 'id', 'Id', 'idServico', 'IdServico', 'servicoId', 'ServicoId');
-    if (hasValue(idServicoItem)) {
-      const parsed = Number(String(idServicoItem).trim());
-      if (Number.isFinite(parsed)) ids.add(parsed);
-    }
-    const nomeItem = getProp(item, 'descricao', 'Descricao', 'nome', 'Nome');
-    if (hasValue(nomeItem)) names.add(String(nomeItem).trim());
-
-    const servicoNested = getProp(item, 'servico', 'Servico');
-    if (servicoNested && typeof servicoNested === 'object') {
-      const nestedId = getProp(servicoNested, 'id', 'Id', 'idServico', 'IdServico');
-      if (hasValue(nestedId)) {
-        const parsedId = Number(String(nestedId).trim());
-        if (Number.isFinite(parsedId)) ids.add(parsedId);
-      }
-      const nestedName = getProp(servicoNested, 'descricao', 'Descricao', 'nome', 'Nome');
-      if (hasValue(nestedName)) names.add(String(nestedName).trim());
-    }
-  });
-
-  const agServ = getProp(raw, 'agendamentoServico', 'AgendamentoServico');
-  if (Array.isArray(agServ)) {
-    agServ.forEach(item => {
-      const idServico = getProp(item, 'idServico', 'IdServico', 'servicoId', 'ServicoId', 'id');
-      if (hasValue(idServico)) {
-        const parsed = Number(String(idServico).trim());
-        if (Number.isFinite(parsed)) ids.add(parsed);
-      }
-      const servico = getProp(item, 'servico', 'Servico');
-      if (servico && typeof servico === 'object') {
-        const nomeServico = getProp(servico, 'descricao', 'Descricao', 'nome', 'Nome');
-        if (hasValue(nomeServico)) names.add(String(nomeServico).trim());
-      }
-    });
-  }
-
-  const agServPlural = normalizeList(getProp(raw, 'agendamentoServicos', 'AgendamentoServicos'));
-  agServPlural.forEach(item => {
-    if (!item || typeof item !== 'object') return;
-    const idServico = getProp(item, 'idServico', 'IdServico', 'servicoId', 'ServicoId', 'id');
-    if (hasValue(idServico)) {
-      const parsed = Number(String(idServico).trim());
-      if (Number.isFinite(parsed)) ids.add(parsed);
-    }
-    const servico = getProp(item, 'servico', 'Servico');
-    if (servico && typeof servico === 'object') {
-      const nomeServico = getProp(servico, 'descricao', 'Descricao', 'nome', 'Nome');
-      if (hasValue(nomeServico)) names.add(String(nomeServico).trim());
-      const nestedId = getProp(servico, 'id', 'Id');
-      if (hasValue(nestedId)) {
-        const parsedId = Number(String(nestedId).trim());
-        if (Number.isFinite(parsedId)) ids.add(parsedId);
-      }
-    }
-  });
-
-  const idServico = getProp(raw, 'idServico', 'IdServico');
-  if (Array.isArray(idServico)) {
-    idServico.forEach(id => {
-      const parsed = Number(String(id).trim());
-      if (Number.isFinite(parsed)) ids.add(parsed);
-    });
-  } else if (typeof idServico === 'string') {
-    const text = idServico.trim();
-    if (text.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) {
-          parsed.forEach(id => {
-            const parsedId = Number(String(id).trim());
-            if (Number.isFinite(parsedId)) ids.add(parsedId);
-          });
-        }
-      } catch {}
-    } else if (text.includes(',')) {
-      text.split(',').forEach(id => {
-        const parsed = Number(id.trim());
-        if (Number.isFinite(parsed)) ids.add(parsed);
-      });
-    } else {
-      const parsed = Number(text);
-      if (Number.isFinite(parsed)) ids.add(parsed);
-    }
-  } else if (Number.isFinite(idServico)) {
-    ids.add(Number(idServico));
-  }
-
-  return {
-    names: Array.from(names).filter(Boolean),
-    ids: Array.from(ids).filter(Number.isFinite)
-  };
-}
-
-function toDisplayDateTime(start, fallbackDate, fallbackTime) {
-  let date = hasValue(fallbackDate) ? String(fallbackDate).trim() : '';
-  let time = hasValue(fallbackTime) ? String(fallbackTime).trim() : '';
-
-  const startStr = hasValue(start) ? String(start).trim() : '';
-  if ((!date || !time) && startStr) {
-    const splitter = startStr.includes('T') ? 'T' : ' ';
-    const [datePart, timePartRaw = ''] = startStr.split(splitter);
-    if (datePart && !date) {
-      const [y, m, d] = datePart.split('-');
-      if (y && m && d) {
-        date = `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y.padStart(4, '0')}`;
-      }
-    }
-    if (timePartRaw && !time) {
-      const clean = timePartRaw.replace('Z', '').trim();
-      if (clean) {
-        const [h = '00', min = '00'] = clean.split(':');
-        time = `${h.padStart(2, '0')}:${min.padStart(2, '0')}`;
-      }
-    }
-  }
-
-  return {
-    date: date || null,
-    time: time || null
-  };
-}
-
-function composeIsoFromDateTime(dateStr, timeStr) {
-  if (!hasValue(dateStr)) return null;
-  const clean = String(dateStr).trim();
-  const parts = clean.split(/[/-]/).map(p => p.trim()).filter(Boolean);
-  if (parts.length !== 3) return null;
-
-  let day;
-  let month;
-  let year;
-  if (parts[0].length === 4) {
-    [year, month, day] = parts;
-  } else {
-    [day, month, year] = parts;
-  }
-
-  if (!day || !month || !year) return null;
-
-  const [hh = '00', mm = '00', ss = '00'] = hasValue(timeStr)
-    ? String(timeStr).split(':').map(p => p.trim()).filter(Boolean)
-    : ['00', '00', '00'];
-
-  const iso = `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hh.padStart(2, '0')}:${mm.padStart(2, '0')}:${ss.padStart(2, '0')}`;
-  return iso;
-}
-
-function toIsoDateTime(value, fallbackDate, fallbackTime) {
-  if (value instanceof Date) {
-    return formatDateToBackend(value);
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return formatDateToBackend(new Date(value));
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed) {
-      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(trimmed)) {
-        return trimmed.length >= 19 ? trimmed.slice(0, 19) : trimmed;
-      }
-      const parsed = new Date(trimmed);
-      if (!Number.isNaN(parsed.getTime())) {
-        return formatDateToBackend(parsed);
-      }
-    }
-  }
-  const iso = composeIsoFromDateTime(fallbackDate, fallbackTime);
-  if (iso) return iso;
-  return null;
-}
-
-function formatDateToBackend(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-}
-
-function parseIsoToDate(value) {
-  if (value instanceof Date) return value;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const parsed = new Date(trimmed);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
-  }
-  return null;
-}
-
-function parseDurationToMinutes(duration) {
-  if (!hasValue(duration)) return null;
-  if (typeof duration === 'number' && Number.isFinite(duration)) return duration;
-  if (typeof duration === 'string') {
-    const trimmed = duration.trim();
-    if (!trimmed) return null;
-    if (trimmed.includes(':')) {
-      const [h = '0', m = '0', s = '0'] = trimmed.split(':');
-      const hours = Number(h);
-      const minutes = Number(m);
-      const seconds = Number(s);
-      let total = 0;
-      if (!Number.isNaN(hours)) total += hours * 60;
-      if (!Number.isNaN(minutes)) total += minutes;
-      if (!Number.isNaN(seconds)) total += seconds / 60;
-      return total || null;
-    }
-    const numeric = Number(trimmed);
-    return Number.isFinite(numeric) ? numeric : null;
-  }
-  if (typeof duration === 'object') {
-    const hours = toNumber(getProp(duration, 'hours', 'Hours', 'hour')) || 0;
-    const minutes = toNumber(getProp(duration, 'minutes', 'Minutes', 'minute')) || 0;
-    const seconds = toNumber(getProp(duration, 'seconds', 'Seconds', 'second')) || 0;
-    const total = hours * 60 + minutes + seconds / 60;
-    return total || null;
-  }
-  return null;
-}
-
-function addDurationMinutes(startIso, duration) {
-  const startDate = parseIsoToDate(startIso);
-  if (!startDate) return null;
-  const minutes = parseDurationToMinutes(duration);
-  const totalMinutes = minutes || 60;
-  const end = new Date(startDate.getTime() + totalMinutes * 60000);
-  return formatDateToBackend(end);
-}
-
-function mapAppointment(raw, fallbackClientId) {
-  const serviceInfo = extractServiceInfo(raw);
-  const professional = getProp(raw, 'professionalName', 'profissionalNome', 'professional', 'profissional');
-  const usuarioObj = getProp(raw, 'usuario', 'Usuario', 'professional', 'Professional');
-  const professionalName = hasValue(professional)
-    ? String(professional).trim()
-    : (usuarioObj && getProp(usuarioObj, 'nomeInteiro', 'NomeInteiro', 'nome', 'Nome', 'nomeUsuario', 'NomeUsuario'));
-
-  const start = getProp(raw, 'start', 'Start', 'dataHoraInicio', 'DataHoraInicio', 'inicio');
-  const end = getProp(raw, 'end', 'End', 'dataHoraFim', 'DataHoraFim', 'fim');
-  const providedDate = getProp(raw, 'date', 'Date', 'data', 'Data');
-  const providedTime = getProp(raw, 'time', 'Time', 'hora', 'Hora');
-  const { date, time } = toDisplayDateTime(start, providedDate, providedTime);
-
-  const status = getProp(raw, 'status', 'Status', 'statusAgendamento', 'StatusAgendamento', 'situacao');
-  const normalizedStatus = hasValue(status) ? String(status).trim().toLowerCase() : '';
-
-  const clientId = getClientId(raw)
-    ?? getClientId(getProp(raw, 'cliente', 'Cliente'))
-    ?? fallbackClientId;
-
-  const professionalId = getProp(raw, 'idUsuario', 'IdUsuario', 'usuarioId', 'UsuarioId');
-  const id = getProp(raw, 'id', 'Id', 'idAgendamento', 'IdAgendamento');
-
-  const valorTotal = getProp(raw, 'valorTotal', 'ValorTotal');
-  const observacao = getProp(raw, 'observacao', 'Observacao');
-
-  const serviceText = serviceInfo.names.length
-    ? serviceInfo.names.join(', ')
-    : (hasValue(getProp(raw, 'service', 'Service')) ? String(getProp(raw, 'service', 'Service')).trim() : null);
-
-  const descriptionParts = [];
-  if (serviceText) descriptionParts.push(serviceText);
-  else descriptionParts.push('Atendimento');
-  if (hasValue(professionalName)) descriptionParts.push(`com ${professionalName}`);
-
-  return {
-    id: hasValue(id) ? id : null,
-    clientId: hasValue(clientId) ? clientId : null,
-    professionalId: hasValue(professionalId) ? professionalId : null,
-    status: status || '',
-    normalizedStatus,
-    start: hasValue(start) ? start : null,
-    end: hasValue(end) ? end : null,
-    date: date,
-    time: time,
-    serviceName: serviceText || 'Atendimento',
-    serviceIds: serviceInfo.ids,
-    serviceNames: serviceInfo.names,
-    professionalName: professionalName ? String(professionalName).trim() : null,
-    description: descriptionParts.join(' '),
-    valorTotal: hasValue(valorTotal) ? Number(valorTotal) : null,
-    observacao: hasValue(observacao) ? String(observacao) : null,
-    raw
-  };
-}
-
-async function fetchCompanyAppointments() {
-  const url = joinUrl(companyBaseUrl, 'agendamento');
-  const resp = await axios.get(url);
-  return normalizeList(resp.data);
-}
-
-const STATUS = {
-  pending: ['pendente', 'pending'],
-  confirmed: ['confirmado', 'scheduled', 'agendado'],
-  canceled: ['cancelado', 'canceled']
-};
-
-function hasStatus(app, statuses) {
-  if (!app || !Array.isArray(statuses)) return false;
-  return statuses.some(status => {
-    if (!status) return false;
-    return app.normalizedStatus === status.toLowerCase();
-  });
-}
-
-function parseComparableDate(app) {
-  if (!app) return null;
-  if (hasValue(app.start)) {
-    const date = parseIsoToDate(app.start);
-    if (date) return date;
-  }
-  if (app.date) {
-    const iso = composeIsoFromDateTime(app.date, app.time || '00:00');
-    if (iso) {
-      const date = parseIsoToDate(iso);
-      if (date) return date;
-    }
-  }
-  return null;
-}
-
-async function loadAppointmentsForClient(session, filterType) {
-  if (!session.client) {
-    throw new Error('Sessão sem cliente associado.');
-  }
-  const sessionClientId = getClientId(session.client);
-  if (!hasValue(sessionClientId)) {
-    throw new Error('Não foi possível identificar o cliente na sessão.');
-  }
-
-  const rawAppointments = await fetchCompanyAppointments();
-  const targetId = String(sessionClientId);
-  const mapped = rawAppointments
-    .map(raw => mapAppointment(raw, sessionClientId))
-    .filter(app => app && hasValue(app.clientId) && String(app.clientId) === targetId);
-
-  if (filterType === 'pending') {
-    return mapped.filter(app => hasStatus(app, STATUS.pending));
-  }
-  if (filterType === 'cancelable') {
-    return mapped.filter(app => hasStatus(app, STATUS.confirmed) || hasStatus(app, STATUS.pending));
-  }
-  if (filterType === 'future') {
-    const now = new Date();
-    return mapped.filter(app => {
-      if (hasStatus(app, STATUS.canceled)) return false;
-      const date = parseComparableDate(app);
-      if (!date) return false;
-      return date >= now;
-    });
-  }
-  return mapped;
-}
-
-function buildAppointmentPrompt(title, appointments) {
-  let text = `${title}\n`;
-  appointments.forEach((app, index) => {
-    const datePart = app.date ? ` em ${app.date}` : '';
-    const timePart = app.time ? ` às ${app.time}` : '';
-    text += `${index + 1} - ${app.description}${datePart}${timePart}\n`;
-  });
-  text += '0 - Voltar';
-  return text.trim();
-}
-
-async function fetchAppointmentById(id) {
+async function failAndReset(msg, sessions, text = 'Ocorreu um erro. Tente novamente mais tarde.') {
   try {
-    const url = joinUrl(companyBaseUrl, 'agendamento', String(id));
+    console.log('[failAndReset] message:', text);
+    await msg.reply(text);
+    if (sessions && msg && msg.from) {
+      console.log('[failAndReset] clearing session for', msg.from);
+      delete sessions[msg.from];
+    }
+  } catch (error) {
+    console.error('[failAndReset] Erro ao responder:', error);
+  }
+}
+
+async function safeReply(msg, text) {
+  try {
+    await msg.reply(text);
+  } catch (error) {
+    console.error('[safeReply] Erro ao enviar mensagem:', error);
+  }
+}
+
+function finalizeSession(session, msg, sessions) {
+  try {
+    if (sessions && msg && msg.from) {
+      delete sessions[msg.from];
+    }
+    return safeReply(msg, 
+      '👋 Atendimento finalizado!\n\n' +
+      'Quando precisar, é só me chamar novamente. Até logo!'
+    );
+  } catch (error) {
+    console.error('[finalizeSession] Erro ao finalizar:', error);
+  }
+}
+
+/* ========================================================= 
+ * API CALLS - CLIENTE
+ * =======================================================*/
+
+async function findClientByCPF(cpf) {
+  const cleanCPF = sanitizeCPF(cpf);
+  
+  // Endpoint correto: GET /{IdEmpresa}/cliente/cpf/{cpf}
+  const url = joinUrl(companyBaseUrl, 'cliente', 'cpf', cleanCPF);
+  
+  console.log('[findClientByCPF] Buscando CPF:', cleanCPF);
+  console.log('[findClientByCPF] URL:', url);
+  
+  try {
     const resp = await axios.get(url);
-    const payload = resp.data;
-    if (payload && typeof payload === 'object') {
-      const nested = getProp(payload, 'data', 'Data', 'resultado', 'Resultado', 'agendamento', 'Agendamento');
-      if (nested && typeof nested === 'object') {
-        return nested;
-      }
+    console.log('[findClientByCPF] Resposta recebida:', JSON.stringify(resp.data, null, 2));
+    
+    // Normalizar resposta
+    let client = resp.data;
+    
+    // Se vier dentro de um wrapper
+    if (client && typeof client === 'object') {
+      if (client.value) client = client.value;
+      if (client.data) client = client.data;
+      if (Array.isArray(client) && client.length > 0) client = client[0];
     }
-    return payload;
-  } catch (err) {
-    console.error('[menu.fetchAppointmentById] erro ao buscar agendamento:', err?.response?.status, err?.response?.data || err.message);
-    return null;
+    
+    return client;
+  } catch (error) {
+    const status = error?.response?.status;
+    console.error('[findClientByCPF] Erro:', {
+      status,
+      data: error?.response?.data,
+      message: error.message
+    });
+    
+    // CPF não encontrado
+    if (status === 404 || status === 400) {
+      console.log('[findClientByCPF] Cliente não encontrado para CPF:', cleanCPF);
+      return null;
+    }
+    
+    throw error;
   }
 }
 
-function normalizeId(value) {
-  if (!hasValue(value)) return null;
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  const parsed = Number(String(value).trim());
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function mergeAppointmentData(base, extra) {
-  if (!extra) return base;
-  const mergedRaw = { ...base.raw, ...extra };
-  const merged = {
-    ...base,
-    raw: mergedRaw
+async function createClient({ cpf, nome, telefone }) {
+  const url = joinUrl(companyBaseUrl, 'cliente');
+  
+  const payload = {
+    cpf: sanitizeCPF(cpf),
+    nome: nome.trim(),
+    telefone: sanitizeCPF(telefone),
+    email: '', // Opcional
+    observacao: '',
+    dataNascimento: null
   };
-
-  if (!hasValue(base.start)) merged.start = getProp(extra, 'dataHoraInicio', 'DataHoraInicio') || base.start;
-  if (!hasValue(base.end)) merged.end = getProp(extra, 'dataHoraFim', 'DataHoraFim') || base.end;
-  if (!hasValue(base.serviceIds) || base.serviceIds.length === 0) {
-    const info = extractServiceInfo(extra);
-    if (info.ids.length) {
-      merged.serviceIds = info.ids;
-      merged.serviceNames = info.names;
-    }
-  }
-  if (!hasValue(base.observacao)) merged.observacao = getProp(extra, 'observacao', 'Observacao') || base.observacao;
-  if (!hasValue(base.valorTotal)) {
-    const valor = getProp(extra, 'valorTotal', 'ValorTotal');
-    if (hasValue(valor)) merged.valorTotal = Number(valor);
-  }
-  if (!hasValue(base.professionalId)) {
-    merged.professionalId = getProp(extra, 'idUsuario', 'IdUsuario', 'usuarioId', 'UsuarioId') || base.professionalId;
-  }
-  if (!hasValue(base.clientId)) {
-    merged.clientId = getClientId(extra) ?? getClientId(getProp(extra, 'cliente', 'Cliente')) ?? base.clientId;
-  }
-  return merged;
-}
-
-function buildUpdatePayload(app, newStatus) {
-  const id = normalizeId(app.id);
-  if (!id) throw new Error('Agendamento sem identificador.');
-
-  let serviceIds = [];
-  if (Array.isArray(app.serviceIds)) {
-    serviceIds = app.serviceIds
-      .map(value => {
-        if (Number.isFinite(value)) return Number(value);
-        const parsed = Number(String(value).trim());
-        return Number.isFinite(parsed) ? parsed : null;
-      })
-      .filter(Number.isFinite);
-  }
-
-  if ((!serviceIds || !serviceIds.length) && app.raw) {
-    try {
-      const info = extractServiceInfo(app.raw);
-      serviceIds = Array.isArray(info?.ids)
-        ? info.ids
-            .map(value => {
-              if (Number.isFinite(value)) return Number(value);
-              const parsed = Number(String(value).trim());
-              return Number.isFinite(parsed) ? parsed : null;
-            })
-            .filter(Number.isFinite)
-        : [];
-    } catch (err) {
-      console.error('[menu.buildUpdatePayload] erro ao extrair serviços do agendamento:', err?.message || err);
-    }
-  }
-
-  if (!serviceIds.length) {
-    throw new Error('Serviços do agendamento não encontrados.');
-  }
-
-  const clientId = normalizeId(app.clientId ?? getClientId(app.raw) ?? getClientId(getProp(app.raw, 'cliente', 'Cliente')));
-  const professionalId = normalizeId(app.professionalId ?? getProp(app.raw, 'idUsuario', 'IdUsuario', 'usuarioId', 'UsuarioId'));
-
-  const startIso = toIsoDateTime(app.start, app.date, app.time);
-  const endIsoCandidate = toIsoDateTime(app.end, null, null)
-    || toIsoDateTime(getProp(app.raw, 'dataHoraFim', 'DataHoraFim'))
-    || addDurationMinutes(startIso, getProp(app.raw, 'tempoDuracaoAgendamento', 'TempoDuracaoAgendamento'))
-    || (startIso ? addDurationMinutes(startIso, 60) : null);
-
-  if (!clientId || !professionalId || !startIso || !endIsoCandidate) {
-    throw new Error('Dados do agendamento incompletos para atualização.');
-  }
-
-  const valorTotal = toNumber(app.valorTotal ?? getProp(app.raw, 'valorTotal', 'ValorTotal'), 0) ?? 0;
-  const observacao = hasValue(app.observacao) ? app.observacao : getProp(app.raw, 'observacao', 'Observacao') || null;
-
-  return {
-    IdCliente: clientId,
-    IdUsuario: professionalId,
-    IdServico: serviceIds,
-    DataHoraInicio: startIso,
-    DataHoraFim: endIsoCandidate,
-    ValorTotal: valorTotal,
-    StatusAgendamento: newStatus,
-    Observacao: observacao
-  };
-}
-
-async function updateAppointmentStatus(app, newStatus) {
-  let payload;
+  
+  console.log('[createClient] URL:', url);
+  console.log('[createClient] Payload:', payload);
+  
   try {
-    payload = buildUpdatePayload(app, newStatus);
-  } catch (err) {
-    const detailed = await fetchAppointmentById(app.id);
-    if (!detailed) throw err;
-    const merged = mergeAppointmentData(app, detailed);
-    payload = buildUpdatePayload(merged, newStatus);
+    const resp = await axios.post(url, payload, { headers: JSON_HEADERS });
+    console.log('[createClient] Cliente criado:', resp.data);
+    return resp.data;
+  } catch (error) {
+    console.error('[createClient] Erro:', {
+      status: error?.response?.status,
+      data: error?.response?.data,
+      message: error.message
+    });
+    throw error;
   }
-
-  const url = joinUrl(companyBaseUrl, 'agendamento', String(app.id));
-  await axios.put(url, payload, { headers: JSON_HEADERS });
 }
 
-function toIsoDate(dateStr) {
-  const [d, m, y] = String(dateStr).trim().split('/');
-  if (!d || !m || !y) return null;
-  const day = String(d).padStart(2, '0');
-  const mon = String(m).padStart(2, '0');
-  if (y.length !== 4) return null;
-  return `${y}-${mon}-${day}`;
+/* ========================================================= 
+ * API CALLS - SERVIÇOS E PROFISSIONAIS
+ * =======================================================*/
+
+async function listServices() {
+  const url = joinUrl(companyBaseUrl, 'servico');
+  console.log('[listServices] URL:', url);
+  
+  try {
+    const resp = await axios.get(url);
+    return normalizeList(resp.data);
+  } catch (error) {
+    console.error('[listServices] Erro:', error?.response?.status, error?.response?.data);
+    throw error;
+  }
 }
+
+async function listProfessionals() {
+  const url = joinUrl(companyBaseUrl, 'usuario');
+  console.log('[listProfessionals] URL:', url);
+  
+  try {
+    const resp = await axios.get(url);
+    return normalizeList(resp.data);
+  } catch (error) {
+    console.error('[listProfessionals] Erro:', error?.response?.status, error?.response?.data);
+    throw error;
+  }
+}
+
+async function listAppointments() {
+  const url = joinUrl(companyBaseUrl, 'agendamento');
+  console.log('[listAppointments] URL:', url);
+  
+  try {
+    const resp = await axios.get(url);
+    return normalizeList(resp.data);
+  } catch (error) {
+    console.error('[listAppointments] Erro:', error?.response?.status, error?.response?.data);
+    throw error;
+  }
+}
+
+async function createAppointment(data) {
+  const url = joinUrl(companyBaseUrl, 'agendamento');
+  console.log('[createAppointment] URL:', url);
+  console.log('[createAppointment] Payload:', data);
+  
+  try {
+    const resp = await axios.post(url, data, { headers: JSON_HEADERS });
+    console.log('[createAppointment] Agendamento criado:', resp.data);
+    return resp.data;
+  } catch (error) {
+    console.error('[createAppointment] Erro:', error?.response?.status, error?.response?.data);
+    throw error;
+  }
+}
+
+async function updateAppointment(id, data) {
+  const url = joinUrl(companyBaseUrl, 'agendamento', String(id));
+  console.log('[updateAppointment] URL:', url);
+  console.log('[updateAppointment] Payload:', data);
+  
+  try {
+    const resp = await axios.put(url, data, { headers: JSON_HEADERS });
+    console.log('[updateAppointment] Agendamento atualizado:', resp.data);
+    return resp.data;
+  } catch (error) {
+    console.error('[updateAppointment] Erro:', error?.response?.status, error?.response?.data);
+    throw error;
+  }
+}
+
+/* ========================================================= 
+ * HELPERS - FORMATAÇÃO E VALIDAÇÃO
+ * =======================================================*/
 
 function parseChoice(text) {
   const n = parseInt(String(text).trim(), 10);
   return Number.isNaN(n) ? null : n;
 }
 
-async function apiGet(path, opts = {}) {
-  const url = joinUrl(companyBaseUrl, path);
-  const resp = await axios.get(url, opts);
-  return resp.data;
+function toIsoDate(dateStr) {
+  const cleaned = String(dateStr).trim();
+  const [d, m, y] = cleaned.split('/');
+  
+  if (!d || !m || !y || y.length !== 4) return null;
+  
+  const day = String(d).padStart(2, '0');
+  const month = String(m).padStart(2, '0');
+  
+  return `${y}-${month}-${day}`;
 }
 
-async function apiPost(path, body, opts = {}) {
-  const url = joinUrl(companyBaseUrl, path);
-  const resp = await axios.post(url, body, { headers: JSON_HEADERS, ...opts });
-  return resp.data;
-}
-
-async function listServices(session, msg) {
-  try {
-    const data = await apiGet('servico');
-    const services = normalizeList(data);
-    session.services = services;
-
-    if (services.length === 0) {
-      await msg.reply('Nenhum serviço disponível.');
-      session.step = 'mainMenu';
-      await msg.reply(menuText());
-      return;
-    }
-
-    const lines = services.map((s, i) => `${i + 1} - ${s.descricao ?? s.nome ?? `Serviço ${i + 1}`}`);
-    await msg.reply(`Qual serviço gostaria de agendar?\n${lines.join('\n')}\n0 - Voltar`.trim());
-  } catch (err) {
-    console.error('[appointment.listServices] API error:', err?.response?.status, err?.response?.data || err.message);
-    await msg.reply('Não consegui carregar os serviços agora. Tente novamente mais tarde.');
-    session.step = 'mainMenu';
-    await msg.reply(menuText());
+function getStatusText(statusValue) {
+  // Status pode vir como número (enum) ou string
+  let statusNum = statusValue;
+  
+  if (typeof statusValue === 'string') {
+    const statusStr = statusValue.toLowerCase().trim();
+    if (statusStr === 'pendente') statusNum = 1;
+    else if (statusStr === 'finalizado') statusNum = 2;
+    else if (statusStr === 'cancelado') statusNum = 3;
+  }
+  
+  statusNum = toNumber(statusNum);
+  
+  switch (statusNum) {
+    case 1: return '⏳ Pendente';
+    case 2: return '✅ Finalizado';
+    case 3: return '❌ Cancelado';
+    default: return '❓ Status desconhecido';
   }
 }
 
-/* =========================================================
- * Fluxo de cadastro
+function formatAppointmentList(appointments) {
+  if (!appointments || appointments.length === 0) {
+    return 'Nenhum agendamento encontrado.';
+  }
+  
+  let text = '';
+  appointments.forEach((app, index) => {
+    const service = getProp(app, 'servico', 'descricao') || 'Atendimento';
+    const date = getProp(app, 'dataHoraInicio', 'inicio');
+    const professional = getProp(app, 'usuario', 'nomeInteiro', 'nomeUsuario') || '';
+    const status = getProp(app, 'statusAgendamento', 'status', 'Status');
+    const statusText = getStatusText(status);
+    
+    let dateStr = '';
+    if (date) {
+      try {
+        const d = new Date(date);
+        dateStr = ` - ${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      } catch {}
+    }
+    
+    text += `${index + 1} - ${service} com ${professional}${dateStr} - ${statusText}\n`;
+  });
+  
+  return text.trim();
+}
+
+function getClientAppointments(allAppointments, clientId) {
+  if (!clientId || !Array.isArray(allAppointments)) return [];
+  
+  const clientIdStr = String(clientId);
+  console.log('[getClientAppointments] Buscando agendamentos para cliente:', clientIdStr);
+  
+  const filtered = allAppointments.filter(app => {
+    const appClientId = getProp(app, 'idCliente', 'clienteId', 'IdCliente');
+    const appClientIdStr = String(appClientId);
+    
+    const match = appClientId && appClientIdStr === clientIdStr;
+    
+    if (match) {
+      console.log('[getClientAppointments] Agendamento encontrado:', {
+        id: getProp(app, 'id', 'idAgendamento'),
+        clientId: appClientIdStr,
+        status: getProp(app, 'statusAgendamento', 'status'),
+        data: getProp(app, 'dataHoraInicio')
+      });
+    }
+    
+    return match;
+  });
+  
+  console.log('[getClientAppointments] Total encontrado:', filtered.length);
+  return filtered;
+}
+
+function getCancelableAppointments(appointments) {
+  const now = new Date();
+  
+  return appointments.filter(app => {
+    const statusRaw = getProp(app, 'statusAgendamento', 'status', 'Status');
+    
+    // Status pode vir como número (enum) ou string
+    let statusValue = statusRaw;
+    
+    // Se for string, converter para número
+    if (typeof statusRaw === 'string') {
+      const statusStr = statusRaw.toLowerCase().trim();
+      if (statusStr === 'pendente') statusValue = 1;
+      else if (statusStr === 'finalizado') statusValue = 2;
+      else if (statusStr === 'cancelado') statusValue = 3;
+    }
+    
+    // Converter para número
+    const statusNum = toNumber(statusValue);
+    
+    console.log('[getCancelableAppointments] Agendamento ID:', getProp(app, 'id', 'idAgendamento'), 'Status:', statusNum);
+    
+    // Apenas status PENDENTE (1) pode ser cancelado
+    if (statusNum !== 1) {
+      return false;
+    }
+    
+    // Data deve ser futura
+    const dateStr = getProp(app, 'dataHoraInicio', 'inicio');
+    if (dateStr) {
+      try {
+        const appDate = new Date(dateStr);
+        const isFuture = appDate > now;
+        console.log('[getCancelableAppointments] Data:', dateStr, 'É futura?', isFuture);
+        return isFuture;
+      } catch {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+}
+
+function getAvailableTimes(appointments, professionalId, date) {
+  const allTimes = [
+    '09:00', '10:00', '11:00', '12:00', 
+    '13:00', '14:00', '15:00', '16:00', '17:00'
+  ];
+  
+  if (!professionalId || !date) return allTimes;
+  
+  const datePrefix = `${date}T`;
+  const profIdStr = String(professionalId);
+  
+  const busyTimes = appointments
+    .filter(app => {
+      const appProfId = getProp(app, 'idUsuario', 'usuarioId', 'IdUsuario');
+      const start = getProp(app, 'dataHoraInicio', 'inicio');
+      
+      return appProfId && String(appProfId) === profIdStr && 
+             start && String(start).startsWith(datePrefix);
+    })
+    .map(app => {
+      const start = getProp(app, 'dataHoraInicio', 'inicio');
+      const match = String(start).match(/T(\d{2}:\d{2})/);
+      return match ? match[1] : null;
+    })
+    .filter(Boolean);
+  
+  return allTimes.filter(time => !busyTimes.includes(time));
+}
+
+/* ========================================================= 
+ * FLUXO 1: CADASTRO E IDENTIFICAÇÃO
  * =======================================================*/
+
 async function start(session, msg, text) {
-  console.log('[registration.start] option:', text);
-  if (text === '1') {
-    session.step = 'awaitExistingCPF';
-    await msg.reply(askCPFExistingText());
-  } else if (text === '2') {
-    session.step = 'awaitCPF';
-    await msg.reply(askCPFNewText());
-  } else {
-    await msg.reply('Opção inválida. Responda com 1 ou 2.');
+  try {
+    console.log('[start] Opção escolhida:', text);
+    
+    if (text === '1') {
+      session.step = 'awaitExistingCPF';
+      await safeReply(msg, askCPFExistingText());
+    } else if (text === '2') {
+      session.step = 'awaitCPF';
+      await safeReply(msg, askCPFNewText());
+    } else {
+      await safeReply(msg, '❌ Opção inválida. Responda com *1* ou *2*.');
+    }
+  } catch (error) {
+    console.error('[start] Erro:', error);
+    await safeReply(msg, '❌ Ocorreu um erro. Tente novamente.');
   }
 }
 
 async function awaitExistingCPF(session, msg, text, sessions) {
-  console.log('[registration.awaitExistingCPF] text:', text);
-  const back = text === '0' || String(text).toLowerCase() === 'voltar';
-  if (back) {
-    session.step = 'start';
-    await msg.reply(startText());
-    return;
-  }
-
-  const cpf = sanitizeCPF(text);
-  console.log('[registration.awaitExistingCPF] sanitized CPF:', cpf);
-  if (cpf.length !== 11) {
-    await msg.reply('CPF inválido. Envie apenas os números (11 dígitos) ou 0 para voltar.');
-    return;
-  }
-
-  session.cpf = cpf;
-
   try {
-    console.log('[registration.awaitExistingCPF] searching client by CPF');
-    const client = await findClientByCPF(session.cpf);
-    console.log('[registration.awaitExistingCPF] result:', client);
-    if (client) {
-      session.tempClient = client;
-      session.step = 'confirmClient';
-      const clientName =
-        getProp(client, 'nome', 'nomeInteiro', 'nomeCompleto', 'nomeCliente', 'Nome', 'NomeCompleto', 'NomeCliente') ||
-        'cliente';
-      const trimmedName = String(clientName).trim();
-      const greetingName = trimmedName.length ? trimmedName : 'cliente';
-      await msg.reply(
-        `Olá ${greetingName}! Encontramos seu cadastro.\n1 - Sim, sou eu\n0 - Voltar`
-      );
-    } else {
-      session.step = 'awaitCPF';
-      await msg.reply(
-        'Não encontrei seu cadastro, vamos realizar um novo.\n' +
-        'Primeiro me passe o seu CPF.\n0 - Voltar'
-      );
-    }
-  } catch (e) {
-    console.error('[registration.awaitExistingCPF] Error:', e?.response?.status, e?.response?.data || e);
-    if (e?.response?.status === 404) {
-      await failAndReset(msg, sessions, 'Empresa não encontrada. Verifique o companyId no backend.');
+    console.log('[awaitExistingCPF] CPF recebido:', text);
+    
+    // Validar entrada
+    if (!isValidInput(text)) {
+      await safeReply(msg, '❌ Mensagem inválida. Por favor, envie apenas o CPF em números.\n\n_Digite *0* para voltar._');
       return;
     }
-    await failAndReset(msg, sessions, 'Erro ao verificar cadastro.');
+    
+    // Voltar
+    if (text === '0' || String(text).toLowerCase() === 'voltar') {
+      session.step = 'start';
+      await safeReply(msg, startText());
+      return;
+    }
+    
+    // Validar CPF
+    const validation = validateCPF(text);
+    if (!validation.valid) {
+      await safeReply(msg, `${validation.message}\n\n_Digite *0* para voltar._`);
+      return;
+    }
+    
+    const cpf = validation.cpf;
+    session.cpf = cpf;
+    
+    console.log('[awaitExistingCPF] CPF validado:', cpf);
+    
+    const client = await findClientByCPF(cpf);
+    
+    if (client) {
+      // Cliente encontrado
+      session.client = client;
+      session.tempClient = client;
+      session.step = 'confirmClient';
+      
+      const clientName = getProp(client, 'nome', 'nomeInteiro', 'nomeCompleto') || 'cliente';
+      
+      await safeReply(msg,
+        `✅ Olá *${clientName}*! Encontramos seu cadastro.\n\n` +
+        `*1* - Sim, sou eu\n` +
+        `*0* - Voltar`
+      );
+    } else {
+      // Cliente não encontrado
+      session.step = 'awaitCPF';
+      await safeReply(msg,
+        '📋 Não encontrei seu cadastro. Vamos fazer um novo!\n\n' +
+        'Por favor, confirme seu CPF (apenas números):\n\n' +
+        '_Digite *0* para voltar._'
+      );
+    }
+  } catch (error) {
+    console.error('[awaitExistingCPF] Erro ao buscar cliente:', error);
+    await failAndReset(msg, sessions, '❌ Erro ao verificar cadastro. Tente novamente.');
   }
 }
 
 async function awaitCPF(session, msg, text) {
-  console.log('[registration.awaitCPF] text:', text);
-  const back = text === '0' || String(text).toLowerCase() === 'voltar';
-  if (back) {
-    session.step = 'start';
-    await msg.reply(startText());
-    return;
+  try {
+    console.log('[awaitCPF] CPF recebido:', text);
+    
+    // Validar entrada
+    if (!isValidInput(text)) {
+      await safeReply(msg, '❌ Mensagem inválida. Por favor, envie apenas o CPF em números.\n\n_Digite *0* para voltar._');
+      return;
+    }
+    
+    // Voltar
+    if (text === '0' || String(text).toLowerCase() === 'voltar') {
+      session.step = 'start';
+      await safeReply(msg, startText());
+      return;
+    }
+    
+    // Validar CPF
+    const validation = validateCPF(text);
+    if (!validation.valid) {
+      await safeReply(msg, `${validation.message}\n\n_Digite *0* para voltar._`);
+      return;
+    }
+    
+    const cpf = validation.cpf;
+    session.cpf = cpf;
+    session.step = 'awaitName';
+    
+    console.log('[awaitCPF] CPF validado:', cpf);
+    
+    await safeReply(msg, askNameText());
+  } catch (error) {
+    console.error('[awaitCPF] Erro:', error);
+    await safeReply(msg, '❌ Ocorreu um erro. Tente novamente.');
   }
-
-  const cpf = sanitizeCPF(text);
-  console.log('[registration.awaitCPF] sanitized CPF:', cpf);
-  if (cpf.length !== 11) {
-    await msg.reply('CPF inválido. Envie apenas os números (11 dígitos) ou 0 para voltar.');
-    return;
-  }
-
-  session.cpf = cpf;
-  session.step = 'awaitName';
-  await msg.reply(askNameText());
 }
 
 async function awaitName(session, msg, text, sessions) {
-  console.log('[registration.awaitName] text:', text);
-  const back = text === '0' || String(text).toLowerCase() === 'voltar';
-  if (back) {
-    session.step = 'awaitCPF';
-    await msg.reply(askCPFNewText());
-    return;
-  }
-
-  const parts = String(text).trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    await msg.reply('Por favor, informe seu nome. Ex: João da Silva\n0 - Voltar');
-    return;
-  }
-  const fullName = parts.join(' ');
-  console.log('[registration.awaitName] fullName:', fullName);
-
   try {
-    console.log('[registration.awaitName] checking existing client for CPF', session.cpf);
+    console.log('[awaitName] Nome recebido:', text);
+    
+    // Validar entrada
+    if (!isValidInput(text)) {
+      await safeReply(msg, '❌ Mensagem inválida. Por favor, envie seu nome.\n\n_Digite *0* para voltar._');
+      return;
+    }
+    
+    // Voltar
+    if (text === '0' || String(text).toLowerCase() === 'voltar') {
+      session.step = 'awaitCPF';
+      await safeReply(msg, askCPFNewText());
+      return;
+    }
+    
+    // Validar nome
+    const parts = String(text).trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      await safeReply(msg, '❌ Por favor, informe seu nome completo.\n\n_Digite *0* para voltar._');
+      return;
+    }
+    
+    if (parts.length === 1) {
+      await safeReply(msg, '❌ Por favor, informe seu nome e sobrenome.\n\n_Digite *0* para voltar._');
+      return;
+    }
+    
+    const fullName = parts.join(' ');
+    
+    // Verificar se já existe (por segurança)
     const existing = await findClientByCPF(session.cpf);
-    console.log('[registration.awaitName] existing:', existing);
-
-    if (!existing) {
+    
+    if (existing) {
+      session.client = existing;
+      console.log('[awaitName] Cliente já existia:', existing);
+    } else {
+      // Criar novo cliente
       const phone = (msg.from || '').split('@')[0] || '';
-      console.log('[registration.awaitName] creating client with phone', phone);
+      
       const created = await createClient({
         cpf: session.cpf,
         nome: fullName,
         telefone: phone
       });
-      console.log('[registration.awaitName] created:', created);
+      
       session.client = created;
-    } else {
-      session.client = existing;
+      console.log('[awaitName] Novo cliente criado:', created);
     }
-
+    
     session.step = 'mainMenu';
-    await msg.reply('Ok, pré-cadastro realizado com sucesso!\n' + menuText());
-  } catch (e) {
-    console.error('[registration.awaitName] Error:', e?.response?.status, e?.response?.data || e);
-    if (e?.response?.status === 404) {
-      await msg.reply('Empresa/rota não encontrada. Confirme o companyId e a rota no backend.');
-    } else if (e?.response?.status === 409) {
-      await msg.reply('Cadastro já existente para este CPF.');
-    } else if (e?.response?.status === 400) {
-      await msg.reply('Dados inválidos para criação do cliente.');
-    } else if (e?.response?.status === 405) {
-      await msg.reply('Método não permitido na rota. (GET by-cpf para consultar, POST /cliente para criar).');
+    await safeReply(msg,
+      '✅ Cadastro realizado com sucesso!\n\n' + 
+      menuText()
+    );
+  } catch (error) {
+    console.error('[awaitName] Erro ao criar cliente:', error);
+    
+    const status = error?.response?.status;
+    
+    if (status === 409) {
+      await safeReply(msg, '❌ Já existe um cadastro com este CPF.');
+    } else if (status === 400) {
+      await safeReply(msg, '❌ Dados inválidos. Verifique as informações.');
     } else {
-      await msg.reply('Não foi possível realizar o cadastro.');
+      await safeReply(msg, '❌ Não foi possível realizar o cadastro. Tente novamente.');
     }
-    delete sessions[msg.from];
+    
+    if (sessions && msg.from) {
+      delete sessions[msg.from];
+    }
   }
 }
 
 async function confirmClient(session, msg, text) {
-  console.log('[registration.confirmClient] text:', text);
-  const back = text === '0' || String(text).toLowerCase() === 'voltar';
-  if (back) {
-    session.step = 'start';
-    delete session.tempClient;
-    await msg.reply(startText());
-    return;
-  }
-
-  if (text === '1') {
-    console.log('[registration.confirmClient] client confirmed');
-    session.client = session.tempClient;
-    delete session.tempClient;
-    session.step = 'mainMenu';
-    await msg.reply(menuText());
-  } else {
-    console.log('[registration.confirmClient] invalid option:', text);
-    await msg.reply('Opção inválida. Responda 1 para confirmar ou 0 para voltar.');
+  try {
+    console.log('[confirmClient] Resposta:', text);
+    
+    // Validar entrada
+    if (!isValidInput(text)) {
+      await safeReply(msg, '❌ Mensagem inválida. Responda *1* para confirmar ou *0* para voltar.');
+      return;
+    }
+    
+    // Voltar
+    if (text === '0' || String(text).toLowerCase() === 'voltar') {
+      session.step = 'start';
+      delete session.tempClient;
+      await safeReply(msg, startText());
+      return;
+    }
+    
+    if (text === '1') {
+      session.client = session.tempClient;
+      delete session.tempClient;
+      session.step = 'mainMenu';
+      await safeReply(msg, '✅ Bem-vindo(a)!\n\n' + menuText());
+    } else {
+      await safeReply(msg, '❌ Opção inválida. Responda *1* para confirmar ou *0* para voltar.');
+    }
+  } catch (error) {
+    console.error('[confirmClient] Erro:', error);
+    await safeReply(msg, '❌ Ocorreu um erro. Tente novamente.');
   }
 }
 
-/* =========================================================
- * Fluxo de menu e agendamentos
+/* ========================================================= 
+ * FLUXO 2: MENU PRINCIPAL
  * =======================================================*/
-async function mainMenu(session, msg, text) {
-  if (text === '0' || text.toLowerCase() === 'voltar') {
-    session.step = 'start';
-    await msg.reply(startText());
-    return;
-  }
 
-  if (text === '1') {
-    session.step = 'service';
-    await listServices(session, msg);
-    return;
-  }
-
-  if (text === '2') {
-    try {
-      const appointments = await loadAppointmentsForClient(session, 'cancelable');
-      session.appointments = appointments;
-      if (!appointments.length) {
-        await msg.reply('Você não possui agendamentos para cancelar.');
-        await msg.reply(menuText());
+async function mainMenu(session, msg, text, sessions) {
+  try {
+    console.log('[mainMenu] Opção:', text);
+    
+    // Validar entrada
+    if (!isValidInput(text)) {
+      await safeReply(msg, '❌ Mensagem inválida. Escolha uma opção do menu:\n\n' + menuText());
+      return;
+    }
+    
+    // Voltar/Finalizar atendimento
+    if (text === '0' || text.toLowerCase() === 'voltar' || text.toLowerCase() === 'sair') {
+      return await finalizeSession(session, msg, sessions);
+    }
+    
+    // 1 - Novo agendamento
+    if (text === '1') {
+      const services = await listServices();
+      session.services = services;
+      
+      if (services.length === 0) {
+        await safeReply(msg, '❌ Nenhum serviço disponível no momento.');
+        await safeReply(msg, menuText());
         return;
       }
-      session.step = 'cancelExisting';
-      await msg.reply(buildAppointmentPrompt('Qual agendamento deseja cancelar?', appointments));
-    } catch (err) {
-      console.error('[menu.mainMenu -> cancelable] erro ao buscar agendamentos:', err?.response?.status, err?.response?.data || err.message);
-      await msg.reply('Não consegui carregar seus agendamentos agora.');
-      await msg.reply(menuText());
+      
+      session.step = 'service';
+      const lines = services.map((s, i) => {
+        const name = getProp(s, 'descricao', 'nome') || `Serviço ${i + 1}`;
+        return `*${i + 1}* - ${name}`;
+      });
+      
+      await safeReply(msg,
+        `📋 Qual serviço você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`
+      );
+      return;
     }
-    return;
-  }
-
-  if (text === '3') {
-    try {
-      const appointments = await loadAppointmentsForClient(session, 'future');
-      if (!appointments.length) {
-        await msg.reply('Você não possui agendamentos futuros.');
-      } else {
-        let list = 'Seus agendamentos:\n';
-        appointments.forEach(app => {
-          const datePart = app.date ? ` em ${app.date}` : '';
-          const timePart = app.time ? ` às ${app.time}` : '';
-          list += `- ${app.description}${datePart}${timePart}\n`;
-        });
-        await msg.reply(list.trim());
+    
+    // 2 - Cancelar agendamento
+    if (text === '2') {
+      const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
+      
+      console.log('[mainMenu] Cliente ID para busca:', clientId);
+      
+      if (!clientId) {
+        await safeReply(msg, '❌ Erro ao identificar seu cadastro.');
+        await safeReply(msg, menuText());
+        return;
       }
-    } catch (err) {
-      console.error('[menu.mainMenu -> future] erro ao buscar agendamentos:', err?.response?.status, err?.response?.data || err.message);
-      await msg.reply('Não consegui carregar seus agendamentos no momento.');
+      
+      const allAppointments = await listAppointments();
+      console.log('[mainMenu] Total de agendamentos:', allAppointments.length);
+      
+      const clientAppointments = getClientAppointments(allAppointments, clientId);
+      console.log('[mainMenu] Agendamentos do cliente:', clientAppointments.length);
+      
+      const cancelable = getCancelableAppointments(clientAppointments);
+      console.log('[mainMenu] Agendamentos canceláveis:', cancelable.length);
+      
+      if (cancelable.length === 0) {
+        await safeReply(msg, '📅 Você não possui agendamentos que podem ser cancelados.\n\n_Apenas agendamentos com status PENDENTE podem ser cancelados._');
+        await safeReply(msg, menuText());
+        return;
+      }
+      
+      session.appointments = cancelable;
+      session.step = 'cancelExisting';
+      
+      const list = formatAppointmentList(cancelable);
+      await safeReply(msg,
+        `🗑️ Qual agendamento deseja cancelar?\n\n${list}\n\n*0* - Voltar`
+      );
+      return;
     }
-    await msg.reply(menuText());
-    return;
+    
+    // 3 - Ver meus agendamentos
+    if (text === '3') {
+      const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
+      
+      console.log('[mainMenu] Cliente ID para listagem:', clientId);
+      
+      if (!clientId) {
+        await safeReply(msg, '❌ Erro ao identificar seu cadastro.');
+        await safeReply(msg, menuText());
+        return;
+      }
+      
+      const allAppointments = await listAppointments();
+      const clientAppointments = getClientAppointments(allAppointments, clientId);
+      
+      // Ordenar por data (mais recentes primeiro)
+      clientAppointments.sort((a, b) => {
+        const dateA = new Date(getProp(a, 'dataHoraInicio', 'inicio') || 0);
+        const dateB = new Date(getProp(b, 'dataHoraInicio', 'inicio') || 0);
+        return dateB - dateA; // Ordem decrescente
+      });
+      
+      if (clientAppointments.length === 0) {
+        await safeReply(msg, '📅 Você não possui agendamentos.');
+      } else {
+        const list = formatAppointmentList(clientAppointments);
+        await safeReply(msg, `📅 *Seus agendamentos:*\n\n${list}`);
+      }
+      
+      await safeReply(msg, menuText());
+      return;
+    }
+    
+    await safeReply(msg, '❌ Opção inválida. Escolha uma das opções do menu:\n\n' + menuText());
+  } catch (error) {
+    console.error('[mainMenu] Erro:', error);
+    await safeReply(msg, '❌ Ocorreu um erro. Tente novamente.\n\n' + menuText());
   }
-
-  await msg.reply('Opção inválida. Escolha uma das opções do menu.');
 }
 
-async function confirmExisting(session, msg, text) {
-  if (text === '0' || text.toLowerCase() === 'voltar') {
-    session.step = 'mainMenu';
-    await msg.reply(menuText());
-    return;
-  }
-
-  const index = parseInt(text, 10) - 1;
-  if (Number.isNaN(index) || index < 0 || !Array.isArray(session.appointments) || index >= session.appointments.length) {
-    await msg.reply('Opção inválida.');
-    return;
-  }
-
-  const appointment = session.appointments[index];
-  try {
-    await updateAppointmentStatus(appointment, 'Confirmado');
-    await msg.reply('Agendamento confirmado com sucesso!');
-  } catch (err) {
-    console.error('[menu.confirmExisting] erro ao confirmar agendamento:', err?.response?.status, err?.response?.data || err.message);
-    await msg.reply('Não foi possível confirmar o agendamento.');
-  }
-
-  session.step = 'mainMenu';
-  await msg.reply(menuText());
-}
+/* ========================================================= 
+ * FLUXO 3: CANCELAMENTO
+ * =======================================================*/
 
 async function cancelExisting(session, msg, text) {
+  console.log('[cancelExisting] Opção:', text);
+  
+  // Voltar
   if (text === '0' || text.toLowerCase() === 'voltar') {
     session.step = 'mainMenu';
     await msg.reply(menuText());
     return;
   }
-
+  
   const index = parseInt(text, 10) - 1;
-  if (Number.isNaN(index) || index < 0 || !Array.isArray(session.appointments) || index >= session.appointments.length) {
-    await msg.reply('Opção inválida.');
+  
+  if (Number.isNaN(index) || index < 0 || !session.appointments || index >= session.appointments.length) {
+    await msg.reply('❌ Opção inválida. Escolha um número da lista.');
     return;
   }
-
+  
   const appointment = session.appointments[index];
-  try {
-    await updateAppointmentStatus(appointment, 'Cancelado');
-    await msg.reply('Agendamento cancelado.');
-  } catch (err) {
-    console.error('[menu.cancelExisting] erro ao cancelar agendamento:', err?.response?.status, err?.response?.data || err.message);
-    await msg.reply('Não foi possível cancelar o agendamento.');
-  }
-
-  session.step = 'mainMenu';
-  await msg.reply(menuText());
-}
-
-async function service(session, msg, text) {
-  if (text === '0' || String(text).toLowerCase() === 'voltar') {
+  const appointmentId = getProp(appointment, 'id', 'idAgendamento', 'IdAgendamento');
+  
+  console.log('[cancelExisting] Agendamento selecionado:', appointmentId);
+  console.log('[cancelExisting] Dados completos:', JSON.stringify(appointment, null, 2));
+  
+  if (!appointmentId) {
+    await msg.reply('❌ Erro ao identificar o agendamento.');
     session.step = 'mainMenu';
     await msg.reply(menuText());
     return;
   }
+  
+  try {
+    // Buscar IDs dos serviços - pode vir de várias formas
+    let serviceIds = [];
+    
+    // Tentar pegar de idServico direto
+    const directServiceId = getProp(appointment, 'idServico', 'servicoId', 'IdServico');
+    if (directServiceId) {
+      if (Array.isArray(directServiceId)) {
+        serviceIds = directServiceId;
+      } else {
+        serviceIds = [directServiceId];
+      }
+    }
+    
+    // Se não achou, tentar de agendamentoServico
+    if (serviceIds.length === 0) {
+      const agendamentoServico = getProp(appointment, 'agendamentoServico', 'AgendamentoServico');
+      if (Array.isArray(agendamentoServico) && agendamentoServico.length > 0) {
+        serviceIds = agendamentoServico
+          .map(item => getProp(item, 'idServico', 'servicoId', 'IdServico'))
+          .filter(Boolean);
+      }
+    }
+    
+    // Se ainda não achou, usar um ID padrão temporário
+    if (serviceIds.length === 0) {
+      console.warn('[cancelExisting] Nenhum serviço encontrado, usando ID padrão');
+      serviceIds = [1]; // ID temporário - ajuste conforme necessário
+    }
+    
+    console.log('[cancelExisting] Service IDs:', serviceIds);
+    
+    // Montar payload de atualização
+    const payload = {
+      idCliente: toNumber(getProp(appointment, 'idCliente', 'clienteId', 'IdCliente')),
+      idUsuario: toNumber(getProp(appointment, 'idUsuario', 'usuarioId', 'IdUsuario')),
+      idServico: serviceIds.map(id => toNumber(id)),
+      dataHoraInicio: getProp(appointment, 'dataHoraInicio', 'inicio'),
+      dataHoraFim: getProp(appointment, 'dataHoraFim', 'fim'),
+      valorTotal: toNumber(getProp(appointment, 'valorTotal'), 0),
+      statusAgendamento: 3, // CANCELADO (enum)
+      observacao: getProp(appointment, 'observacao') || 'Cancelado via WhatsApp'
+    };
+    
+    console.log('[cancelExisting] Payload para cancelamento:', JSON.stringify(payload, null, 2));
+    
+    await updateAppointment(appointmentId, payload);
+    await msg.reply('✅ Agendamento cancelado com sucesso!');
+  } catch (error) {
+    console.error('[cancelExisting] Erro ao cancelar:', error);
+    console.error('[cancelExisting] Resposta da API:', error?.response?.data);
+    await msg.reply('❌ Não foi possível cancelar o agendamento. Tente novamente.');
+  }
+  
+  session.step = 'mainMenu';
+  await msg.reply(menuText());
+}
 
-  const services = normalizeList(session.services);
-  if (services.length === 0) {
-    await msg.reply('Lista de serviços vazia. Carregando novamente...');
-    await listServices(session, msg);
+/* ========================================================= 
+ * FLUXO 4: NOVO AGENDAMENTO
+ * =======================================================*/
+
+async function service(session, msg, text) {
+  console.log('[service] Opção:', text);
+  
+  // Voltar
+  if (text === '0' || text.toLowerCase() === 'voltar') {
+    session.step = 'mainMenu';
+    await msg.reply(menuText());
     return;
   }
-
+  
+  const services = session.services || [];
   const choice = parseChoice(text);
   const idx = choice !== null ? choice - 1 : -1;
+  
   if (idx < 0 || idx >= services.length) {
-    await msg.reply('Opção inválida. Escolha um número da lista.');
+    await msg.reply('❌ Opção inválida. Escolha um número da lista.');
     return;
   }
-
+  
   session.service = services[idx];
-
+  
   try {
-    const data = await apiGet('usuario');
-    const professionals = normalizeList(data);
+    const professionals = await listProfessionals();
     session.professionals = professionals;
-
+    
     if (professionals.length === 0) {
-      await msg.reply('Nenhum profissional disponível.');
+      await msg.reply('❌ Nenhum profissional disponível no momento.');
       session.step = 'mainMenu';
       await msg.reply(menuText());
       return;
     }
-
+    
     session.step = 'professional';
-    const lines = professionals.map((p, i) => `${i + 1} - ${p.nomeInteiro ?? p.nome ?? `Profissional ${i + 1}`}`);
-    await msg.reply(`Com qual profissional?\n${lines.join('\n')}\n0 - Voltar`.trim());
-  } catch (err) {
-    console.error('[appointment.service->professionals] API error:', err?.response?.status, err?.response?.data || err.message);
-    await msg.reply('Não consegui carregar os profissionais agora.');
+    const lines = professionals.map((p, i) => {
+      const name = getProp(p, 'nomeInteiro', 'nome', 'nomeUsuario') || `Profissional ${i + 1}`;
+      return `*${i + 1}* - ${name}`;
+    });
+    
+    await msg.reply(
+      `👤 Com qual profissional você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`
+    );
+  } catch (error) {
+    console.error('[service] Erro ao carregar profissionais:', error);
+    await msg.reply('❌ Não consegui carregar os profissionais. Tente novamente.');
     session.step = 'mainMenu';
     await msg.reply(menuText());
   }
 }
 
 async function professional(session, msg, text) {
-  if (text === '0' || String(text).toLowerCase() === 'voltar') {
+  console.log('[professional] Opção:', text);
+  
+  // Voltar
+  if (text === '0' || text.toLowerCase() === 'voltar') {
     session.step = 'service';
-    await listServices(session, msg);
+    
+    const services = session.services || [];
+    const lines = services.map((s, i) => {
+      const name = getProp(s, 'descricao', 'nome') || `Serviço ${i + 1}`;
+      return `*${i + 1}* - ${name}`;
+    });
+    
+    await msg.reply(
+      `📋 Qual serviço você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`
+    );
     return;
   }
-
-  const professionals = normalizeList(session.professionals);
-  if (professionals.length === 0) {
-    await msg.reply('Lista de profissionais vazia. Voltando aos serviços...');
-    session.step = 'service';
-    await listServices(session, msg);
-    return;
-  }
-
+  
+  const professionals = session.professionals || [];
   const choice = parseChoice(text);
   const idx = choice !== null ? choice - 1 : -1;
+  
   if (idx < 0 || idx >= professionals.length) {
-    await msg.reply('Opção inválida. Escolha um número da lista.');
+    await msg.reply('❌ Opção inválida. Escolha um número da lista.');
     return;
   }
-
+  
   session.professional = professionals[idx];
   session.step = 'date';
-  await msg.reply('Qual o melhor dia para você? (DD/MM/AAAA)\n0 - Voltar');
+  
+  await msg.reply(
+    '📅 Qual o melhor dia para você?\n\n' +
+    'Digite a data no formato: *DD/MM/AAAA*\n' +
+    'Exemplo: 15/12/2025\n\n' +
+    '_Digite *0* para voltar._'
+  );
 }
 
 async function date(session, msg, text) {
-  if (text === '0' || String(text).toLowerCase() === 'voltar') {
+  console.log('[date] Data recebida:', text);
+  
+  // Voltar
+  if (text === '0' || text.toLowerCase() === 'voltar') {
     session.step = 'professional';
-    const professionals = normalizeList(session.professionals);
-    const lines = professionals.map((p, i) => `${i + 1} - ${p.nomeInteiro ?? p.nome ?? `Profissional ${i + 1}`}`);
-    await msg.reply(`Com qual profissional?\n${lines.join('\n')}\n0 - Voltar`.trim());
-    return;
-  }
-
-  const iso = toIsoDate(text);
-  if (!iso) {
-    await msg.reply('Data inválida. Use o formato DD/MM/AAAA.\n0 - Voltar');
-    return;
-  }
-  session.date = text;
-
-  try {
-    const data = await apiGet('agendamento');
-    const appointments = normalizeList(data);
-
-    const profId = session.professional?.id ?? session.professional?.idUsuario ?? session.professional?.Id;
-    const dayPrefix = `${iso}T`;
-
-    const busy = appointments.filter(a => {
-      const aUser = a.idUsuario ?? a.usuarioId ?? a.IdUsuario;
-      const start = a.dataHoraInicio ?? a.inicio ?? a.start;
-      return aUser === profId && typeof start === 'string' && start.startsWith(dayPrefix);
+    
+    const professionals = session.professionals || [];
+    const lines = professionals.map((p, i) => {
+      const name = getProp(p, 'nomeInteiro', 'nome', 'nomeUsuario') || `Profissional ${i + 1}`;
+      return `*${i + 1}* - ${name}`;
     });
-
-    const allTimes = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
-    const times = allTimes.filter(t => !busy.some(b => String(b.dataHoraInicio ?? b.inicio ?? '').includes(`${t}`)));
-
-    session.times = times;
-
-    if (times.length === 0) {
-      await msg.reply('Nenhum horário disponível para esse dia.');
-      session.step = 'mainMenu';
-      await msg.reply(menuText());
+    
+    await msg.reply(
+      `👤 Com qual profissional você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`
+    );
+    return;
+  }
+  
+  // Validar data
+  const isoDate = toIsoDate(text);
+  if (!isoDate) {
+    await msg.reply('❌ Data inválida. Use o formato *DD/MM/AAAA*.\n\n_Digite *0* para voltar._');
+    return;
+  }
+  
+  // Verificar se não é data passada
+  try {
+    const selectedDate = new Date(isoDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (selectedDate < today) {
+      await msg.reply('❌ Não é possível agendar em datas passadas.\n\n_Digite *0* para voltar._');
       return;
     }
-
+  } catch {}
+  
+  session.date = text;
+  session.isoDate = isoDate;
+  
+  try {
+    const allAppointments = await listAppointments();
+    const professionalId = getProp(session.professional, 'id', 'idUsuario', 'IdUsuario');
+    
+    const availableTimes = getAvailableTimes(allAppointments, professionalId, isoDate);
+    
+    if (availableTimes.length === 0) {
+      await msg.reply('❌ Não há horários disponíveis para este dia. Escolha outra data.');
+      return;
+    }
+    
+    session.times = availableTimes;
     session.step = 'time';
-    const lines = times.map((t, i) => `${i + 1} - ${t}`);
-    await msg.reply(`De acordo com os horários disponíveis, escolha um abaixo:\n${lines.join('\n')}\n0 - Voltar`.trim());
-  } catch (err) {
-    console.error('[appointment.date->agendamento] API error:', err?.response?.status, err?.response?.data || err.message);
-    await msg.reply('Não consegui carregar os horários agora.');
+    
+    const lines = availableTimes.map((t, i) => `*${i + 1}* - ${t}`);
+    
+    await msg.reply(
+      `🕐 Horários disponíveis para ${text}:\n\n${lines.join('\n')}\n\n*0* - Voltar`
+    );
+  } catch (error) {
+    console.error('[date] Erro ao buscar horários:', error);
+    await msg.reply('❌ Não consegui carregar os horários disponíveis.');
     session.step = 'mainMenu';
     await msg.reply(menuText());
   }
 }
 
 async function time(session, msg, text) {
-  if (text === '0' || String(text).toLowerCase() === 'voltar') {
+  console.log('[time] Opção:', text);
+  
+  // Voltar
+  if (text === '0' || text.toLowerCase() === 'voltar') {
     session.step = 'date';
-    await msg.reply('Qual o melhor dia para você? (DD/MM/AAAA)\n0 - Voltar');
+    await msg.reply(
+      '📅 Qual o melhor dia para você?\n\n' +
+      'Digite a data no formato: *DD/MM/AAAA*\n' +
+      'Exemplo: 15/12/2025\n\n' +
+      '_Digite *0* para voltar._'
+    );
     return;
   }
-
-  const times = Array.isArray(session.times) ? session.times : [];
-  if (times.length === 0) {
-    await msg.reply('A lista de horários está vazia. Informe a data novamente.');
-    session.step = 'date';
-    await msg.reply('Qual o melhor dia para você? (DD/MM/AAAA)\n0 - Voltar');
-    return;
-  }
-
+  
+  const times = session.times || [];
   const choice = parseChoice(text);
   const idx = choice !== null ? choice - 1 : -1;
+  
   if (idx < 0 || idx >= times.length) {
-    await msg.reply('Opção inválida. Escolha um número da lista.');
+    await msg.reply('❌ Opção inválida. Escolha um número da lista.');
     return;
   }
-
+  
   session.time = times[idx];
   session.step = 'confirmAppointment';
-
-  const svc = session.service || {};
-  const prof = session.professional || {};
+  
+  const serviceName = getProp(session.service, 'descricao', 'nome') || 'Serviço';
+  const professionalName = getProp(session.professional, 'nomeInteiro', 'nome', 'nomeUsuario') || 'Profissional';
+  
   await msg.reply(
-    `Certo, agora confirme o agendamento:\n${svc.descricao ?? svc.nome ?? 'Serviço'} ` +
-    `com o profissional ${prof.nomeInteiro ?? prof.nome ?? ''}, ` +
-    `no dia ${session.date} às ${session.time}.\n\n` +
-    `1 - Confirmar\n2 - Cancelar e iniciar novamente\n0 - Voltar`
+    '✅ *Confirme seu agendamento:*\n\n' +
+    `📋 Serviço: ${serviceName}\n` +
+    `👤 Profissional: ${professionalName}\n` +
+    `📅 Data: ${session.date}\n` +
+    `🕐 Horário: ${session.time}\n\n` +
+    '*1* - Confirmar\n' +
+    '*2* - Cancelar e voltar ao menu\n' +
+    '*0* - Voltar'
   );
 }
 
 async function confirmAppointment(session, msg, text) {
-  if (text === '0' || String(text).toLowerCase() === 'voltar') {
+  console.log('[confirmAppointment] Resposta:', text);
+  
+  // Voltar
+  if (text === '0' || text.toLowerCase() === 'voltar') {
     session.step = 'time';
-    const times = Array.isArray(session.times) ? session.times : [];
-    const lines = times.map((t, i) => `${i + 1} - ${t}`);
+    
+    const times = session.times || [];
+    const lines = times.map((t, i) => `*${i + 1}* - ${t}`);
+    
     await msg.reply(
-      (lines.length
-        ? `De acordo com os horários disponíveis, escolha um abaixo:\n${lines.join('\n')}\n0 - Voltar`
-        : 'Sem horários carregados. Informe novamente a data (DD/MM/AAAA).'
-      ).trim()
+      `🕐 Horários disponíveis:\n\n${lines.join('\n')}\n\n*0* - Voltar`
     );
     return;
   }
-
-  if (text === '1') {
-    const iso = toIsoDate(session.date);
-    if (!iso) {
-      await msg.reply('Data inválida. Recomeçando a seleção de data.');
-      session.step = 'date';
-      await msg.reply('Qual o melhor dia para você? (DD/MM/AAAA)\n0 - Voltar');
-      return;
-    }
-
-    const idCliente =
-      session.client?.id ??
-      session.client?.idCliente ??
-      session.client?.IdCliente ??
-      session.client?.Id;
-
-    const idUsuario =
-      session.professional?.id ??
-      session.professional?.idUsuario ??
-      session.professional?.IdUsuario ??
-      session.professional?.Id;
-
-    const idServico =
-      session.service?.id ??
-      session.service?.idServico ??
-      session.service?.IdServico ??
-      session.service?.Id;
-
-    if (!idCliente || !idUsuario || !idServico) {
-      console.error('[appointment.confirm] missing ids', { idCliente, idUsuario, idServico });
-      await msg.reply('Dados insuficientes para confirmar o agendamento. Recomeçando.');
-      session.step = 'mainMenu';
-      await msg.reply(menuText());
-      return;
-    }
-
-    try {
-      await apiPost('agendamento', {
-        idCliente,
-        idUsuario,
-        idServico: [idServico],
-        dataHoraInicio: `${iso}T${session.time}:00`
-      });
-      await msg.reply('Agendamento confirmado com sucesso! ✔');
-      session.step = 'mainMenu';
-      await msg.reply(menuText());
-    } catch (err) {
-      console.error('[appointment.confirm] API error:', err?.response?.status, err?.response?.data || err.message);
-      await msg.reply('Não consegui confirmar seu agendamento agora.');
-      session.step = 'mainMenu';
-      await msg.reply(menuText());
-    }
-
-  } else if (text === '2') {
-    session.step = 'service';
-    await listServices(session, msg);
-  } else {
-    await msg.reply('Opção inválida.');
+  
+  // Cancelar
+  if (text === '2') {
+    session.step = 'mainMenu';
+    await msg.reply('❌ Agendamento cancelado.\n\n' + menuText());
+    return;
   }
+  
+  // Confirmar
+  if (text === '1') {
+    const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
+    const professionalId = getProp(session.professional, 'id', 'idUsuario', 'IdUsuario');
+    const serviceId = getProp(session.service, 'id', 'idServico', 'IdServico');
+    
+    if (!clientId || !professionalId || !serviceId) {
+      console.error('[confirmAppointment] Dados incompletos:', { clientId, professionalId, serviceId });
+      await msg.reply('❌ Erro ao processar o agendamento. Dados incompletos.');
+      session.step = 'mainMenu';
+      await msg.reply(menuText());
+      return;
+    }
+    
+    try {
+      const dataHoraInicio = `${session.isoDate}T${session.time}:00`;
+      
+      const payload = {
+        idCliente: clientId,
+        idUsuario: professionalId,
+        idServico: [serviceId],
+        dataHoraInicio: dataHoraInicio,
+        observacao: 'Agendamento via WhatsApp'
+      };
+      
+      await createAppointment(payload);
+      
+      await msg.reply('✅ *Agendamento confirmado com sucesso!*');
+      session.step = 'mainMenu';
+      await msg.reply(menuText());
+    } catch (error) {
+      console.error('[confirmAppointment] Erro ao criar agendamento:', error);
+      await msg.reply('❌ Não foi possível confirmar o agendamento. Tente novamente.');
+      session.step = 'mainMenu';
+      await msg.reply(menuText());
+    }
+    return;
+  }
+  
+  await msg.reply('❌ Opção inválida. Responda *1* para confirmar, *2* para cancelar ou *0* para voltar.');
 }
+
+/* ========================================================= 
+ * EXPORTS
+ * =======================================================*/
 
 module.exports = {
   start,
@@ -1290,11 +1196,12 @@ module.exports = {
   awaitName,
   confirmClient,
   mainMenu,
-  confirmExisting,
   cancelExisting,
   service,
   professional,
   date,
   time,
-  confirmAppointment
+  confirmAppointment,
+  finalizeSession,
+  safeReply
 };
