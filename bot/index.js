@@ -3,6 +3,8 @@ require('dotenv').config();
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode'); // Para gerar buffer de imagem
+const express = require('express'); // Adicione: npm install express
 const { allowedNumbers } = require('./config');
 
 const {
@@ -63,8 +65,46 @@ function broadcastMessage(data) {
   });
 }
 
+// Variável para armazenar o QR code atual
+let currentQR = null;
+
+// Configuração do servidor HTTP com Express (porta 3000)
+const app = express();
+
+app.get('/qr', (req, res) => {
+  if (!currentQR) {
+    return res.status(404).send('No QR code available');
+  }
+
+  QRCode.toBuffer(currentQR, { type: 'png' }, (err, buffer) => {
+    if (err) {
+      console.error('Error generating QR buffer:', err);
+      return res.status(500).send('Error generating QR code');
+    }
+    res.type('image/png').send(buffer);
+  });
+});
+
+app.listen(3000, () => {
+  console.log('HTTP server rodando na porta 3000. Endpoint /qr disponível.');
+});
+
 client.on('qr', qr => {
+  currentQR = qr;
   qrcode.generate(qr, { small: true });
+  console.log('QR code gerado!');
+  // Notifica o frontend via WebSocket que o QR está disponível
+  broadcastMessage({
+    type: 'qr_generated',
+    qr: qr // Opcional, mas pode ser usado se precisar
+  });
+});
+
+client.on('authenticated', () => {
+  currentQR = null;
+  console.log('Autenticado! QR não mais necessário.');
+  // Notifica o frontend para remover o QR
+  broadcastMessage({ type: 'qr_cleared' });
 });
 
 client.on('ready', () => {

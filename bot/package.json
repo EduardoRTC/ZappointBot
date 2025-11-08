@@ -12,6 +12,8 @@
     "axios": "^1.6.2",
     "axios-cookiejar-support": "^6.0.4",
     "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "tough-cookie": "^5.1.2",
     "whatsapp-web.js": "^1.23.0"

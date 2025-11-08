@@ -1,3 +1,2 @@
-2025/11/08-18:56:42.921 5e70 Reusing MANIFEST C:\Users\Eduardo Carvalho\Desktop\Faculdade\TCC\bot\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
-2025/11/08-18:56:42.923 5e70 Recovering log #4
-2025/11/08-18:56:42.923 5e70 Reusing old log C:\Users\Eduardo Carvalho\Desktop\Faculdade\TCC\bot\.wwebjs_auth\session\Default\Local Storage\leveldb/000004.log 
+2025/11/08-19:07:02.480 4fe4 Creating DB C:\Users\Eduardo Carvalho\Desktop\Faculdade\TCC\bot\.wwebjs_auth\session\Default\Local Storage\leveldb since it was missing.
+2025/11/08-19:07:02.523 4fe4 Reusing MANIFEST C:\Users\Eduardo Carvalho\Desktop\Faculdade\TCC\bot\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001

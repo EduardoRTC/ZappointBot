@@ -1,3 +1,2 @@
-2025/11/08-18:56:43.574 5e70 Reusing MANIFEST C:\Users\Eduardo Carvalho\Desktop\Faculdade\TCC\bot\.wwebjs_auth\session\Default\Session Storage/MANIFEST-000001
-2025/11/08-18:56:43.575 5e70 Recovering log #3
-2025/11/08-18:56:43.575 5e70 Reusing old log C:\Users\Eduardo Carvalho\Desktop\Faculdade\TCC\bot\.wwebjs_auth\session\Default\Session Storage/000003.log 
+2025/11/08-19:07:03.154 4fe4 Creating DB C:\Users\Eduardo Carvalho\Desktop\Faculdade\TCC\bot\.wwebjs_auth\session\Default\Session Storage since it was missing.
+2025/11/08-19:07:03.172 4fe4 Reusing MANIFEST C:\Users\Eduardo Carvalho\Desktop\Faculdade\TCC\bot\.wwebjs_auth\session\Default\Session Storage/MANIFEST-000001
