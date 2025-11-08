@@ -23,6 +23,8 @@ const {
 
 const { startText } = require('./utils/messages');
 
+const WebSocket = require('ws'); // Adicione esta dependência: npm install ws
+
 const client = new Client({ authStrategy: new LocalAuth() });
 
 const sessions = {};
@@ -42,12 +44,50 @@ const handlers = {
   confirmAppointment
 };
 
+// Configuração do WebSocket Server (porta 8080, por exemplo)
+const wss = new WebSocket.Server({ port: 8080 });
+
+wss.on('connection', (ws) => {
+  console.log('Frontend conectado via WebSocket');
+  ws.on('message', (message) => {
+    console.log('Mensagem recebida do frontend:', message.toString());
+  });
+});
+
+// Função para broadcast de mensagens para todos os clients conectados
+function broadcastMessage(data) {
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(data));
+    }
+  });
+}
+
 client.on('qr', qr => {
   qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
   console.log('Bot is ready!');
+});
+
+// Evento para mensagens enviadas pelo bot
+client.on('message_create', async (msg) => {
+  if (msg.fromMe) { // Verifica se a mensagem foi enviada pelo bot
+    const sender = msg.to.split('@')[0]; // Destinatário como "sender" para consistência
+    console.log('[message_create] Bot sent:', { to: msg.to, body: msg.body });
+
+    // Whitelist check (assumindo que só envia para whitelisted)
+    if (allowedNumbers.includes(sender)) {
+      broadcastMessage({
+        type: 'bot_message',
+        sender: sender,
+        to: msg.to,
+        body: msg.body,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
 });
 
 client.on('message', async msg => {
@@ -67,6 +107,15 @@ client.on('message', async msg => {
       return;
     }
     console.log(`Mensagem de numero ${sender} permitido`);
+
+    // Envia informação do número whitelisted e mensagem para o frontend via WebSocket
+    broadcastMessage({
+      type: 'user_message',
+      sender: sender,
+      from: msg.from,
+      body: msg.body,
+      timestamp: new Date().toISOString()
+    });
 
     const chatId = msg.from;
     const text = (msg.body || '').trim();
@@ -102,3 +151,5 @@ client.on('message', async msg => {
 });
 
 client.initialize();
+
+console.log('WebSocket server rodando na porta 8080. Conecte seu frontend em ws://localhost:8080');
