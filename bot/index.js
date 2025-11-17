@@ -7,6 +7,9 @@ const QRCode = require('qrcode');
 const express = require('express');
 const cors = require('cors');
 const { allowedNumbers } = require('./config');
+const WebSocket = require('ws');
+const fs = require('fs');
+const path = require('path');
 
 const {
   start,
@@ -25,8 +28,6 @@ const {
 } = require('./flows/conversation');
 
 const { startText } = require('./utils/messages');
-
-const WebSocket = require('ws');
 
 const client = new Client({ authStrategy: new LocalAuth() });
 
@@ -47,7 +48,33 @@ const handlers = {
   confirmAppointment
 };
 
-// Configuração do WebSocket Server (porta 8080)
+// Caminhos das pastas de sessão do wwebjs
+const AUTH_DIR = path.join(__dirname, '.wwebjs_auth');
+const CACHE_DIR = path.join(__dirname, '.wwebjs_cache');
+
+// ======================= Histórico de conversa =======================
+/**
+ * Estrutura de cada item:
+ * {
+ *   type: 'user_message' | 'bot_message',
+ *   sender?: string,
+ *   from?: string,
+ *   to?: string,
+ *   body: string,
+ *   timestamp: string
+ * }
+ */
+const conversationHistory = [];
+const MAX_HISTORY = 500; // limita pra não crescer infinito
+
+function addToHistory(entry) {
+  conversationHistory.push(entry);
+  if (conversationHistory.length > MAX_HISTORY) {
+    conversationHistory.shift(); // remove o mais antigo
+  }
+}
+
+// ======================= WebSocket Server (8080) =======================
 const wss = new WebSocket.Server({ port: 8080 });
 
 wss.on('connection', (ws) => {
@@ -57,6 +84,14 @@ wss.on('connection', (ws) => {
   if (isAuthenticated) {
     ws.send(JSON.stringify({ type: 'qr_cleared' }));
   }
+
+  // Envia histórico da conversa pro cliente recém-conectado
+  if (conversationHistory.length > 0) {
+    ws.send(JSON.stringify({
+      type: 'history',
+      messages: conversationHistory
+    }));
+  }
   
   ws.on('message', (message) => {
     console.log('Mensagem recebida do frontend:', message.toString());
@@ -65,9 +100,9 @@ wss.on('connection', (ws) => {
 
 // Função para broadcast de mensagens
 function broadcastMessage(data) {
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(data));
+  wss.clients.forEach((clientWs) => {
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.send(JSON.stringify(data));
     }
   });
 }
@@ -77,12 +112,11 @@ let currentQR = null;
 let isAuthenticated = false;
 let isClientReady = false;
 
-// Configuração do servidor HTTP (porta 3001)
+// ======================= Servidor HTTP (3001) =======================
 const app = express();
 
-app.use(cors({
-  origin: 'http://localhost:3000'
-}));
+// CORS liberado pra qualquer origem (dev)
+app.use(cors());
 
 // Endpoint para verificar status de autenticação
 app.get('/status', (req, res) => {
@@ -111,11 +145,76 @@ app.get('/qr', (req, res) => {
   });
 });
 
-app.listen(3001, () => {
-  console.log('HTTP server rodando na porta 3001. Endpoint /qr disponível.');
+// Endpoint para resetar sessão e deletar .wwebjs_auth / .wwebjs_cache
+app.post('/reset-session', async (req, res) => {
+  console.log('Requisição para /reset-session recebida');
+
+  try {
+    // 1) Tenta deslogar
+    try {
+      await client.logout();
+      console.log('Logout do cliente WhatsApp realizado.');
+    } catch (err) {
+      console.warn(
+        'Falha ao tentar logout (pode não estar autenticado):',
+        err?.message || err
+      );
+    }
+
+    // 2) Destroi o client atual (fecha Puppeteer / sessão antiga)
+    try {
+      await client.destroy();
+      console.log('Client WhatsApp destruído.');
+    } catch (err) {
+      console.warn(
+        'Falha ao destruir client (talvez já destruído):',
+        err?.message || err
+      );
+    }
+
+    // 3) Zera estados internos
+    isAuthenticated = false;
+    isClientReady = false;
+    currentQR = null;
+
+    // 4) Apaga as pastas de sessão
+    const dirs = [AUTH_DIR, CACHE_DIR];
+
+    for (const dir of dirs) {
+      try {
+        await fs.promises.rm(dir, { recursive: true, force: true });
+        console.log(`Diretório removido (ou não existia): ${dir}`);
+      } catch (err) {
+        console.error(`Erro ao remover diretório ${dir}:`, err);
+      }
+    }
+
+    // 5) Re-inicializa o client – isso vai disparar um novo "qr" depois
+    client.initialize();
+    console.log('Client WhatsApp re-inicializado após reset-session.');
+
+    // 6) Notifica front (caso queira reagir a isso)
+    broadcastMessage({ type: 'qr_generated' });
+
+    return res.json({
+      ok: true,
+      message:
+        'Sessão resetada. Pastas removidas e client reinicializado. Um novo QR será gerado em instantes.'
+    });
+  } catch (err) {
+    console.error('Erro ao resetar sessão:', err);
+    return res.status(500).json({
+      ok: false,
+      error: 'Falha ao resetar sessão do bot.'
+    });
+  }
 });
 
-// Eventos do WhatsApp
+app.listen(3001, () => {
+  console.log('HTTP server rodando na porta 3001. Endpoint /status, /qr e /reset-session disponíveis.');
+});
+
+// ======================= Eventos do WhatsApp =======================
 client.on('qr', qr => {
   if (isAuthenticated || isClientReady) {
     console.log('QR recebido mas já está autenticado - ignorando');
@@ -127,7 +226,6 @@ client.on('qr', qr => {
   qrcode.generate(qr, { small: true });
   console.log('QR code gerado!');
   
-  // Só notifica se houver clientes conectados
   if (wss.clients.size > 0) {
     broadcastMessage({
       type: 'qr_generated',
@@ -141,7 +239,6 @@ client.on('authenticated', () => {
   isAuthenticated = true;
   console.log('Autenticado! QR não mais necessário.');
   
-  // Só notifica se já houver clientes conectados
   if (wss.clients.size > 0) {
     broadcastMessage({ type: 'qr_cleared' });
   }
@@ -164,14 +261,12 @@ client.on('disconnected', (reason) => {
   isClientReady = false;
   currentQR = null;
   
-  // Não tente reconectar automaticamente em caso de LOGOUT
   if (reason === 'LOGOUT') {
     console.log('Sessão foi deslogada. Reinicie o bot para gerar novo QR code.');
-    process.exit(1); // Encerra o processo para evitar loops
+    process.exit(1);
   }
 });
 
-// Evento de erro de autenticação
 client.on('auth_failure', msg => {
   console.error('Falha na autenticação:', msg);
   isAuthenticated = false;
@@ -179,25 +274,26 @@ client.on('auth_failure', msg => {
   currentQR = null;
 });
 
-// Evento de carregamento
 client.on('loading_screen', (percent, message) => {
   console.log('Carregando...', percent, message);
 });
 
-// Evento para mensagens enviadas pelo bot
 client.on('message_create', async (msg) => {
   if (msg.fromMe) {
     const sender = msg.to.split('@')[0];
     console.log('[message_create] Bot sent:', { to: msg.to, body: msg.body });
 
     if (allowedNumbers.includes(sender)) {
-      broadcastMessage({
+      const payload = {
         type: 'bot_message',
         sender: sender,
         to: msg.to,
         body: msg.body,
         timestamp: new Date().toISOString()
-      });
+      };
+
+      addToHistory(payload);
+      broadcastMessage(payload);
     }
   }
 });
@@ -207,33 +303,32 @@ client.on('message', async msg => {
     const sender = (msg.author || msg.from).split('@')[0];
     console.log('[message] received:', { from: msg.from, sender, body: msg.body });
 
-    // Ignora grupos
     if (msg.from.endsWith('@g.us')) {
       console.log(`Mensagem de ${sender} enviada de um grupo IGNORADA`);
       return;
     }
 
-    // Whitelist
     if (!allowedNumbers.includes(sender)) {
       console.log(`Mensagem de numero ${sender} IGNORADA - Não é whitelisted`);
       return;
     }
     console.log(`Mensagem de numero ${sender} permitido`);
 
-    // Envia para o frontend
-    broadcastMessage({
+    const payload = {
       type: 'user_message',
       sender: sender,
       from: msg.from,
       body: msg.body,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    addToHistory(payload);
+    broadcastMessage(payload);
 
     const chatId = msg.from;
     const text = (msg.body || '').trim();
     console.log('[message] chatId:', chatId, 'text:', text);
 
-    // Cria sessão e manda menu inicial
     if (!sessions[chatId]) {
       sessions[chatId] = { step: 'start' };
       console.log('[message] starting new session for', chatId);
@@ -266,6 +361,15 @@ client.initialize();
 
 // Tratamento de erros não capturados
 process.on('unhandledRejection', (reason, promise) => {
+  const msg = reason && reason.message ? String(reason.message) : String(reason);
+
+  // Ignora erros de protocolo do Puppeteer após logout/destroy
+  if (msg.includes('Protocol error (Runtime.callFunctionOn)') ||
+      msg.includes('Session closed. Most likely the page has been closed.')) {
+    console.warn('⚠️ Erro de protocolo do Puppeteer após logout (ignorado):', msg);
+    return;
+  }
+
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 

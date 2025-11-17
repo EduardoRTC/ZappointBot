@@ -1,1 +1,8 @@
 bot/node_modules/
+# Cache do whatsapp-web.js
+/bot/.wwebjs_cache/
+/bot/.wwebjs_auth/
+
+# Node modules do frontend
+/AgendaZap-FrontEnd-React/node_modules/
+/AgendaZap-FrontEnd-React/clinic-app/node_modules/
