@@ -37,17 +37,14 @@ function sanitizeCPF(text) {
 function validateCPF(cpf) {
   const cleanCPF = sanitizeCPF(cpf);
   
-  // CPF deve ter 11 dígitos
   if (cleanCPF.length !== 11) {
     return { valid: false, message: '❌ CPF inválido. O CPF deve ter 11 dígitos.' };
   }
   
-  // Verifica se todos os dígitos são iguais (ex: 111.111.111-11)
   if (/^(\d)\1{10}$/.test(cleanCPF)) {
     return { valid: false, message: '❌ CPF inválido. Todos os dígitos não podem ser iguais.' };
   }
   
-  // Validação do primeiro dígito verificador
   let sum = 0;
   for (let i = 0; i < 9; i++) {
     sum += parseInt(cleanCPF.charAt(i)) * (10 - i);
@@ -59,7 +56,6 @@ function validateCPF(cpf) {
     return { valid: false, message: '❌ CPF inválido. Verifique os números digitados.' };
   }
   
-  // Validação do segundo dígito verificador
   sum = 0;
   for (let i = 0; i < 10; i++) {
     sum += parseInt(cleanCPF.charAt(i)) * (11 - i);
@@ -75,14 +71,10 @@ function validateCPF(cpf) {
 }
 
 function isValidInput(text) {
-  // Verifica se é texto válido (não emoji, figurinha, etc)
   if (!text || typeof text !== 'string') return false;
-  
   const trimmed = text.trim();
   if (trimmed.length === 0) return false;
-  
-  // Aceita números, letras, espaços e alguns caracteres especiais comuns
-  return true; // Por enquanto aceita tudo, mas pode ser mais restritivo
+  return true;
 }
 
 function hasValue(value) {
@@ -128,24 +120,27 @@ function toNumber(value, fallback = undefined) {
   return Number.isFinite(num) ? num : fallback;
 }
 
-async function failAndReset(msg, sessions, text = 'Ocorreu um erro. Tente novamente mais tarde.') {
-  try {
-    console.log('[failAndReset] message:', text);
-    await msg.reply(text);
-    if (sessions && msg && msg.from) {
-      console.log('[failAndReset] clearing session for', msg.from);
-      delete sessions[msg.from];
-    }
-  } catch (error) {
-    console.error('[failAndReset] Erro ao responder:', error);
-  }
-}
-
 async function safeReply(msg, text) {
   try {
     await msg.reply(text);
+    return true;
   } catch (error) {
-    console.error('[safeReply] Erro ao enviar mensagem:', error);
+    console.error('[safeReply] ERRO ao enviar mensagem:', error.message);
+    return false;
+  }
+}
+
+async function resetSession(session, msg, sessions, message) {
+  try {
+    console.log('[resetSession] Resetando sessão:', msg.from);
+    
+    if (sessions && msg && msg.from) {
+      delete sessions[msg.from];
+    }
+    
+    await safeReply(msg, message || '❌ Vamos começar novamente.\n\n' + startText());
+  } catch (error) {
+    console.error('[resetSession] ERRO ao resetar sessão:', error.message);
   }
 }
 
@@ -159,31 +154,24 @@ function finalizeSession(session, msg, sessions) {
       'Quando precisar, é só me chamar novamente. Até logo!'
     );
   } catch (error) {
-    console.error('[finalizeSession] Erro ao finalizar:', error);
+    console.error('[finalizeSession] ERRO ao finalizar:', error.message);
   }
 }
 
 /* ========================================================= 
- * API CALLS - CLIENTE
+ * API CALLS - COM TRATAMENTO DE ERRO COMPLETO
  * =======================================================*/
 
 async function findClientByCPF(cpf) {
   const cleanCPF = sanitizeCPF(cpf);
-  
-  // Endpoint correto: GET /{IdEmpresa}/cliente/cpf/{cpf}
   const url = joinUrl(companyBaseUrl, 'cliente', 'cpf', cleanCPF);
   
   console.log('[findClientByCPF] Buscando CPF:', cleanCPF);
-  console.log('[findClientByCPF] URL:', url);
   
   try {
     const resp = await axios.get(url);
-    console.log('[findClientByCPF] Resposta recebida:', JSON.stringify(resp.data, null, 2));
-    
-    // Normalizar resposta
     let client = resp.data;
     
-    // Se vier dentro de um wrapper
     if (client && typeof client === 'object') {
       if (client.value) client = client.value;
       if (client.data) client = client.data;
@@ -193,18 +181,13 @@ async function findClientByCPF(cpf) {
     return client;
   } catch (error) {
     const status = error?.response?.status;
-    console.error('[findClientByCPF] Erro:', {
-      status,
-      data: error?.response?.data,
-      message: error.message
-    });
     
-    // CPF não encontrado
     if (status === 404 || status === 400) {
-      console.log('[findClientByCPF] Cliente não encontrado para CPF:', cleanCPF);
+      console.log('[findClientByCPF] Cliente não encontrado');
       return null;
     }
     
+    console.error('[findClientByCPF] ERRO:', error.message);
     throw error;
   }
 }
@@ -216,103 +199,90 @@ async function createClient({ cpf, nome, telefone }) {
     cpf: sanitizeCPF(cpf),
     nome: nome.trim(),
     telefone: sanitizeCPF(telefone),
-    email: '', // Opcional
+    email: '',
     observacao: '',
     dataNascimento: null
   };
   
-  console.log('[createClient] URL:', url);
-  console.log('[createClient] Payload:', payload);
+  console.log('[createClient] Criando cliente');
   
   try {
     const resp = await axios.post(url, payload, { headers: JSON_HEADERS });
-    console.log('[createClient] Cliente criado:', resp.data);
+    console.log('[createClient] ✅ Cliente criado com sucesso');
     return resp.data;
   } catch (error) {
-    console.error('[createClient] Erro:', {
+    console.error('[createClient] ERRO:', {
       status: error?.response?.status,
-      data: error?.response?.data,
       message: error.message
     });
     throw error;
   }
 }
 
-/* ========================================================= 
- * API CALLS - SERVIÇOS E PROFISSIONAIS
- * =======================================================*/
-
 async function listServices() {
   const url = joinUrl(companyBaseUrl, 'servico');
-  console.log('[listServices] URL:', url);
   
   try {
     const resp = await axios.get(url);
     return normalizeList(resp.data);
   } catch (error) {
-    console.error('[listServices] Erro:', error?.response?.status, error?.response?.data);
+    console.error('[listServices] ERRO:', error.message);
     throw error;
   }
 }
 
 async function listProfessionals() {
   const url = joinUrl(companyBaseUrl, 'usuario');
-  console.log('[listProfessionals] URL:', url);
   
   try {
     const resp = await axios.get(url);
     return normalizeList(resp.data);
   } catch (error) {
-    console.error('[listProfessionals] Erro:', error?.response?.status, error?.response?.data);
+    console.error('[listProfessionals] ERRO:', error.message);
     throw error;
   }
 }
 
 async function listAppointments() {
   const url = joinUrl(companyBaseUrl, 'agendamento');
-  console.log('[listAppointments] URL:', url);
   
   try {
     const resp = await axios.get(url);
     return normalizeList(resp.data);
   } catch (error) {
-    console.error('[listAppointments] Erro:', error?.response?.status, error?.response?.data);
+    console.error('[listAppointments] ERRO:', error.message);
     throw error;
   }
 }
 
 async function createAppointment(data) {
   const url = joinUrl(companyBaseUrl, 'agendamento');
-  console.log('[createAppointment] URL:', url);
-  console.log('[createAppointment] Payload:', data);
   
   try {
     const resp = await axios.post(url, data, { headers: JSON_HEADERS });
-    console.log('[createAppointment] Agendamento criado:', resp.data);
+    console.log('[createAppointment] ✅ Agendamento criado');
     return resp.data;
   } catch (error) {
-    console.error('[createAppointment] Erro:', error?.response?.status, error?.response?.data);
+    console.error('[createAppointment] ERRO:', error.message);
     throw error;
   }
 }
 
 async function updateAppointment(id, data) {
   const url = joinUrl(companyBaseUrl, 'agendamento', String(id));
-  console.log('[updateAppointment] URL:', url);
-  console.log('[updateAppointment] Payload:', data);
   
   try {
     const resp = await axios.put(url, data, { headers: JSON_HEADERS });
-    console.log('[updateAppointment] Agendamento atualizado:', resp.data);
+    console.log('[updateAppointment] ✅ Agendamento atualizado');
     return resp.data;
   } catch (error) {
-    console.error('[updateAppointment] Erro:', error?.response?.status, error?.response?.data);
+    console.error('[updateAppointment] ERRO:', error.message);
     throw error;
   }
 }
 
 /* ========================================================= 
- * HELPERS - FORMATAÇÃO E VALIDAÇÃO
+ * HELPERS
  * =======================================================*/
 
 function parseChoice(text) {
@@ -333,7 +303,6 @@ function toIsoDate(dateStr) {
 }
 
 function getStatusText(statusValue) {
-  // Status pode vir como número (enum) ou string
   let statusNum = statusValue;
   
   if (typeof statusValue === 'string') {
@@ -384,28 +353,11 @@ function getClientAppointments(allAppointments, clientId) {
   if (!clientId || !Array.isArray(allAppointments)) return [];
   
   const clientIdStr = String(clientId);
-  console.log('[getClientAppointments] Buscando agendamentos para cliente:', clientIdStr);
   
-  const filtered = allAppointments.filter(app => {
+  return allAppointments.filter(app => {
     const appClientId = getProp(app, 'idCliente', 'clienteId', 'IdCliente');
-    const appClientIdStr = String(appClientId);
-    
-    const match = appClientId && appClientIdStr === clientIdStr;
-    
-    if (match) {
-      console.log('[getClientAppointments] Agendamento encontrado:', {
-        id: getProp(app, 'id', 'idAgendamento'),
-        clientId: appClientIdStr,
-        status: getProp(app, 'statusAgendamento', 'status'),
-        data: getProp(app, 'dataHoraInicio')
-      });
-    }
-    
-    return match;
+    return appClientId && String(appClientId) === clientIdStr;
   });
-  
-  console.log('[getClientAppointments] Total encontrado:', filtered.length);
-  return filtered;
 }
 
 function getCancelableAppointments(appointments) {
@@ -414,10 +366,7 @@ function getCancelableAppointments(appointments) {
   return appointments.filter(app => {
     const statusRaw = getProp(app, 'statusAgendamento', 'status', 'Status');
     
-    // Status pode vir como número (enum) ou string
     let statusValue = statusRaw;
-    
-    // Se for string, converter para número
     if (typeof statusRaw === 'string') {
       const statusStr = statusRaw.toLowerCase().trim();
       if (statusStr === 'pendente') statusValue = 1;
@@ -425,24 +374,15 @@ function getCancelableAppointments(appointments) {
       else if (statusStr === 'cancelado') statusValue = 3;
     }
     
-    // Converter para número
     const statusNum = toNumber(statusValue);
     
-    console.log('[getCancelableAppointments] Agendamento ID:', getProp(app, 'id', 'idAgendamento'), 'Status:', statusNum);
+    if (statusNum !== 1) return false;
     
-    // Apenas status PENDENTE (1) pode ser cancelado
-    if (statusNum !== 1) {
-      return false;
-    }
-    
-    // Data deve ser futura
     const dateStr = getProp(app, 'dataHoraInicio', 'inicio');
     if (dateStr) {
       try {
         const appDate = new Date(dateStr);
-        const isFuture = appDate > now;
-        console.log('[getCancelableAppointments] Data:', dateStr, 'É futura?', isFuture);
-        return isFuture;
+        return appDate > now;
       } catch {
         return false;
       }
@@ -482,12 +422,12 @@ function getAvailableTimes(appointments, professionalId, date) {
 }
 
 /* ========================================================= 
- * FLUXO 1: CADASTRO E IDENTIFICAÇÃO
+ * FLUXOS COM TRATAMENTO DE ERRO COMPLETO
  * =======================================================*/
 
 async function start(session, msg, text) {
   try {
-    console.log('[start] Opção escolhida:', text);
+    console.log('[start] Opção:', text);
     
     if (text === '1') {
       session.step = 'awaitExistingCPF';
@@ -499,29 +439,26 @@ async function start(session, msg, text) {
       await safeReply(msg, '❌ Opção inválida. Responda com *1* ou *2*.');
     }
   } catch (error) {
-    console.error('[start] Erro:', error);
-    await safeReply(msg, '❌ Ocorreu um erro. Tente novamente.');
+    console.error('[start] ERRO CAPTURADO:', error.message);
+    await safeReply(msg, '❌ Ocorreu um erro. Vamos tentar novamente.\n\n' + startText());
   }
 }
 
 async function awaitExistingCPF(session, msg, text, sessions) {
   try {
-    console.log('[awaitExistingCPF] CPF recebido:', text);
+    console.log('[awaitExistingCPF] CPF:', text);
     
-    // Validar entrada
     if (!isValidInput(text)) {
-      await safeReply(msg, '❌ Mensagem inválida. Por favor, envie apenas o CPF em números.\n\n_Digite *0* para voltar._');
+      await safeReply(msg, '❌ Mensagem inválida. Envie apenas o CPF em números.\n\n_Digite *0* para voltar._');
       return;
     }
     
-    // Voltar
     if (text === '0' || String(text).toLowerCase() === 'voltar') {
       session.step = 'start';
       await safeReply(msg, startText());
       return;
     }
     
-    // Validar CPF
     const validation = validateCPF(text);
     if (!validation.valid) {
       await safeReply(msg, `${validation.message}\n\n_Digite *0* para voltar._`);
@@ -531,12 +468,9 @@ async function awaitExistingCPF(session, msg, text, sessions) {
     const cpf = validation.cpf;
     session.cpf = cpf;
     
-    console.log('[awaitExistingCPF] CPF validado:', cpf);
-    
     const client = await findClientByCPF(cpf);
     
     if (client) {
-      // Cliente encontrado
       session.client = client;
       session.tempClient = client;
       session.step = 'confirmClient';
@@ -549,7 +483,6 @@ async function awaitExistingCPF(session, msg, text, sessions) {
         `*0* - Voltar`
       );
     } else {
-      // Cliente não encontrado
       session.step = 'awaitCPF';
       await safeReply(msg,
         '📋 Não encontrei seu cadastro. Vamos fazer um novo!\n\n' +
@@ -558,29 +491,28 @@ async function awaitExistingCPF(session, msg, text, sessions) {
       );
     }
   } catch (error) {
-    console.error('[awaitExistingCPF] Erro ao buscar cliente:', error);
-    await failAndReset(msg, sessions, '❌ Erro ao verificar cadastro. Tente novamente.');
+    console.error('[awaitExistingCPF] ERRO CAPTURADO:', error.message);
+    await resetSession(session, msg, sessions, 
+      '❌ Erro ao verificar cadastro. Vamos começar novamente.\n\n' + startText()
+    );
   }
 }
 
 async function awaitCPF(session, msg, text) {
   try {
-    console.log('[awaitCPF] CPF recebido:', text);
+    console.log('[awaitCPF] CPF:', text);
     
-    // Validar entrada
     if (!isValidInput(text)) {
-      await safeReply(msg, '❌ Mensagem inválida. Por favor, envie apenas o CPF em números.\n\n_Digite *0* para voltar._');
+      await safeReply(msg, '❌ Mensagem inválida. Envie apenas o CPF em números.\n\n_Digite *0* para voltar._');
       return;
     }
     
-    // Voltar
     if (text === '0' || String(text).toLowerCase() === 'voltar') {
       session.step = 'start';
       await safeReply(msg, startText());
       return;
     }
     
-    // Validar CPF
     const validation = validateCPF(text);
     if (!validation.valid) {
       await safeReply(msg, `${validation.message}\n\n_Digite *0* para voltar._`);
@@ -591,33 +523,28 @@ async function awaitCPF(session, msg, text) {
     session.cpf = cpf;
     session.step = 'awaitName';
     
-    console.log('[awaitCPF] CPF validado:', cpf);
-    
     await safeReply(msg, askNameText());
   } catch (error) {
-    console.error('[awaitCPF] Erro:', error);
+    console.error('[awaitCPF] ERRO CAPTURADO:', error.message);
     await safeReply(msg, '❌ Ocorreu um erro. Tente novamente.');
   }
 }
 
 async function awaitName(session, msg, text, sessions) {
   try {
-    console.log('[awaitName] Nome recebido:', text);
+    console.log('[awaitName] Nome:', text);
     
-    // Validar entrada
     if (!isValidInput(text)) {
-      await safeReply(msg, '❌ Mensagem inválida. Por favor, envie seu nome.\n\n_Digite *0* para voltar._');
+      await safeReply(msg, '❌ Mensagem inválida. Envie seu nome.\n\n_Digite *0* para voltar._');
       return;
     }
     
-    // Voltar
     if (text === '0' || String(text).toLowerCase() === 'voltar') {
       session.step = 'awaitCPF';
       await safeReply(msg, askCPFNewText());
       return;
     }
     
-    // Validar nome
     const parts = String(text).trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) {
       await safeReply(msg, '❌ Por favor, informe seu nome completo.\n\n_Digite *0* para voltar._');
@@ -631,14 +558,24 @@ async function awaitName(session, msg, text, sessions) {
     
     const fullName = parts.join(' ');
     
-    // Verificar se já existe (por segurança)
-    const existing = await findClientByCPF(session.cpf);
+    // Verificar se já existe
+    try {
+      const existing = await findClientByCPF(session.cpf);
+      
+      if (existing) {
+        session.client = existing;
+        console.log('[awaitName] Cliente já existe, usando cadastro existente');
+        
+        session.step = 'mainMenu';
+        await safeReply(msg, '✅ Cadastro encontrado! Bem-vindo(a) de volta.\n\n' + menuText());
+        return;
+      }
+    } catch (checkError) {
+      console.error('[awaitName] Erro ao verificar cliente existente:', checkError.message);
+    }
     
-    if (existing) {
-      session.client = existing;
-      console.log('[awaitName] Cliente já existia:', existing);
-    } else {
-      // Criar novo cliente
+    // Criar novo cliente
+    try {
       const phone = (msg.from || '').split('@')[0] || '';
       
       const created = await createClient({
@@ -648,30 +585,73 @@ async function awaitName(session, msg, text, sessions) {
       });
       
       session.client = created;
-      console.log('[awaitName] Novo cliente criado:', created);
+      session.step = 'mainMenu';
+      
+      await safeReply(msg, '✅ Cadastro realizado com sucesso!\n\n' + menuText());
+      
+    } catch (createError) {
+      const status = createError?.response?.status;
+      const errorData = createError?.response?.data;
+      
+      console.error('[awaitName] Erro ao criar cliente:', {
+        status,
+        data: errorData,
+        message: createError.message
+      });
+      
+      // CPF duplicado
+      if (status === 400 && errorData) {
+        const errorMsg = Array.isArray(errorData) ? errorData[0]?.message : errorData?.message;
+        
+        if (errorMsg && errorMsg.toLowerCase().includes('mesmo cpf')) {
+          await safeReply(msg,
+            '⚠️ Este CPF já está cadastrado no sistema.\n\n' +
+            'Digite *1* para tentar fazer login com este CPF\n' +
+            'Digite *0* para voltar ao início'
+          );
+          session.step = 'start';
+          return;
+        }
+        
+        await safeReply(msg,
+          `❌ Dados inválidos: ${errorMsg || 'Erro desconhecido'}\n\n` +
+          'Vamos começar novamente.\n\n' +
+          startText()
+        );
+        await resetSession(session, msg, sessions, '');
+        return;
+      }
+      
+      // Erro de servidor
+      if (status >= 500) {
+        await safeReply(msg,
+          '⚠️ Nosso sistema está temporariamente indisponível.\n\n' +
+          'Digite *1* para tentar novamente\n' +
+          'Digite *0* para voltar ao início'
+        );
+        return;
+      }
+      
+      // Erro de rede
+      if (!createError.response) {
+        await safeReply(msg,
+          '⚠️ Não foi possível conectar ao servidor.\n\n' +
+          'Digite *1* para tentar novamente\n' +
+          'Digite *0* para voltar ao início'
+        );
+        return;
+      }
+      
+      // Qualquer outro erro
+      await resetSession(session, msg, sessions,
+        '❌ Não foi possível realizar o cadastro.\n\n' + startText()
+      );
     }
-    
-    session.step = 'mainMenu';
-    await safeReply(msg,
-      '✅ Cadastro realizado com sucesso!\n\n' + 
-      menuText()
-    );
   } catch (error) {
-    console.error('[awaitName] Erro ao criar cliente:', error);
-    
-    const status = error?.response?.status;
-    
-    if (status === 409) {
-      await safeReply(msg, '❌ Já existe um cadastro com este CPF.');
-    } else if (status === 400) {
-      await safeReply(msg, '❌ Dados inválidos. Verifique as informações.');
-    } else {
-      await safeReply(msg, '❌ Não foi possível realizar o cadastro. Tente novamente.');
-    }
-    
-    if (sessions && msg.from) {
-      delete sessions[msg.from];
-    }
+    console.error('[awaitName] ERRO CRÍTICO CAPTURADO:', error.message);
+    await resetSession(session, msg, sessions,
+      '❌ Ocorreu um erro inesperado. Vamos começar novamente.\n\n' + startText()
+    );
   }
 }
 
@@ -679,13 +659,11 @@ async function confirmClient(session, msg, text) {
   try {
     console.log('[confirmClient] Resposta:', text);
     
-    // Validar entrada
     if (!isValidInput(text)) {
       await safeReply(msg, '❌ Mensagem inválida. Responda *1* para confirmar ou *0* para voltar.');
       return;
     }
     
-    // Voltar
     if (text === '0' || String(text).toLowerCase() === 'voltar') {
       session.step = 'start';
       delete session.tempClient;
@@ -702,487 +680,493 @@ async function confirmClient(session, msg, text) {
       await safeReply(msg, '❌ Opção inválida. Responda *1* para confirmar ou *0* para voltar.');
     }
   } catch (error) {
-    console.error('[confirmClient] Erro:', error);
+    console.error('[confirmClient] ERRO CAPTURADO:', error.message);
     await safeReply(msg, '❌ Ocorreu um erro. Tente novamente.');
   }
 }
-
-/* ========================================================= 
- * FLUXO 2: MENU PRINCIPAL
- * =======================================================*/
 
 async function mainMenu(session, msg, text, sessions) {
   try {
     console.log('[mainMenu] Opção:', text);
     
-    // Validar entrada
     if (!isValidInput(text)) {
-      await safeReply(msg, '❌ Mensagem inválida. Escolha uma opção do menu:\n\n' + menuText());
+      await safeReply(msg, '❌ Mensagem inválida. Escolha uma opção:\n\n' + menuText());
       return;
     }
     
-    // Voltar/Finalizar atendimento
     if (text === '0' || text.toLowerCase() === 'voltar' || text.toLowerCase() === 'sair') {
       return await finalizeSession(session, msg, sessions);
     }
     
     // 1 - Novo agendamento
     if (text === '1') {
-      const services = await listServices();
-      session.services = services;
-      
-      if (services.length === 0) {
-        await safeReply(msg, '❌ Nenhum serviço disponível no momento.');
-        await safeReply(msg, menuText());
-        return;
+      try {
+        const services = await listServices();
+        session.services = services;
+        
+        if (services.length === 0) {
+          await safeReply(msg, '❌ Nenhum serviço disponível no momento.');
+          await safeReply(msg, menuText());
+          return;
+        }
+        
+        session.step = 'service';
+        const lines = services.map((s, i) => {
+          const name = getProp(s, 'descricao', 'nome') || `Serviço ${i + 1}`;
+          return `*${i + 1}* - ${name}`;
+        });
+        
+        await safeReply(msg, `📋 Qual serviço você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`);
+      } catch (error) {
+        console.error('[mainMenu] ERRO ao carregar serviços:', error.message);
+        await safeReply(msg, '❌ Não foi possível carregar os serviços.\n\n' + menuText());
       }
-      
-      session.step = 'service';
-      const lines = services.map((s, i) => {
-        const name = getProp(s, 'descricao', 'nome') || `Serviço ${i + 1}`;
-        return `*${i + 1}* - ${name}`;
-      });
-      
-      await safeReply(msg,
-        `📋 Qual serviço você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`
-      );
       return;
     }
     
     // 2 - Cancelar agendamento
     if (text === '2') {
-      const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
-      
-      console.log('[mainMenu] Cliente ID para busca:', clientId);
-      
-      if (!clientId) {
-        await safeReply(msg, '❌ Erro ao identificar seu cadastro.');
-        await safeReply(msg, menuText());
-        return;
+      try {
+        const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
+        
+        if (!clientId) {
+          await safeReply(msg, '❌ Erro ao identificar seu cadastro.');
+          await safeReply(msg, menuText());
+          return;
+        }
+        
+        const allAppointments = await listAppointments();
+        const clientAppointments = getClientAppointments(allAppointments, clientId);
+        const cancelable = getCancelableAppointments(clientAppointments);
+        
+        if (cancelable.length === 0) {
+          await safeReply(msg, '📅 Você não possui agendamentos que podem ser cancelados.\n\n_Apenas agendamentos PENDENTES podem ser cancelados._');
+          await safeReply(msg, menuText());
+          return;
+        }
+        
+        session.appointments = cancelable;
+        session.step = 'cancelExisting';
+        
+        const list = formatAppointmentList(cancelable);
+        await safeReply(msg, `🗑️ Qual agendamento deseja cancelar?\n\n${list}\n\n*0* - Voltar`);
+      } catch (error) {
+        console.error('[mainMenu] ERRO ao carregar agendamentos:', error.message);
+        await safeReply(msg, '❌ Não foi possível carregar os agendamentos.\n\n' + menuText());
       }
-      
-      const allAppointments = await listAppointments();
-      console.log('[mainMenu] Total de agendamentos:', allAppointments.length);
-      
-      const clientAppointments = getClientAppointments(allAppointments, clientId);
-      console.log('[mainMenu] Agendamentos do cliente:', clientAppointments.length);
-      
-      const cancelable = getCancelableAppointments(clientAppointments);
-      console.log('[mainMenu] Agendamentos canceláveis:', cancelable.length);
-      
-      if (cancelable.length === 0) {
-        await safeReply(msg, '📅 Você não possui agendamentos que podem ser cancelados.\n\n_Apenas agendamentos com status PENDENTE podem ser cancelados._');
-        await safeReply(msg, menuText());
-        return;
-      }
-      
-      session.appointments = cancelable;
-      session.step = 'cancelExisting';
-      
-      const list = formatAppointmentList(cancelable);
-      await safeReply(msg,
-        `🗑️ Qual agendamento deseja cancelar?\n\n${list}\n\n*0* - Voltar`
-      );
       return;
     }
     
     // 3 - Ver meus agendamentos
     if (text === '3') {
-      const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
-      
-      console.log('[mainMenu] Cliente ID para listagem:', clientId);
-      
-      if (!clientId) {
-        await safeReply(msg, '❌ Erro ao identificar seu cadastro.');
+      try {
+        const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
+        
+        if (!clientId) {
+          await safeReply(msg, '❌ Erro ao identificar seu cadastro.');
+          await safeReply(msg, menuText());
+          return;
+        }
+        
+        const allAppointments = await listAppointments();
+        const clientAppointments = getClientAppointments(allAppointments, clientId);
+        
+        clientAppointments.sort((a, b) => {
+          const dateA = new Date(getProp(a, 'dataHoraInicio', 'inicio') || 0);
+          const dateB = new Date(getProp(b, 'dataHoraInicio', 'inicio') || 0);
+          return dateB - dateA;
+        });
+        
+        if (clientAppointments.length === 0) {
+          await safeReply(msg, '📅 Você não possui agendamentos.');
+        } else {
+          const list = formatAppointmentList(clientAppointments);
+          await safeReply(msg, `📅 *Seus agendamentos:*\n\n${list}`);
+        }
+        
         await safeReply(msg, menuText());
-        return;
+      } catch (error) {
+        console.error('[mainMenu] ERRO ao listar agendamentos:', error.message);
+        await safeReply(msg, '❌ Não foi possível carregar seus agendamentos.\n\n' + menuText());
       }
-      
-      const allAppointments = await listAppointments();
-      const clientAppointments = getClientAppointments(allAppointments, clientId);
-      
-      // Ordenar por data (mais recentes primeiro)
-      clientAppointments.sort((a, b) => {
-        const dateA = new Date(getProp(a, 'dataHoraInicio', 'inicio') || 0);
-        const dateB = new Date(getProp(b, 'dataHoraInicio', 'inicio') || 0);
-        return dateB - dateA; // Ordem decrescente
-      });
-      
-      if (clientAppointments.length === 0) {
-        await safeReply(msg, '📅 Você não possui agendamentos.');
-      } else {
-        const list = formatAppointmentList(clientAppointments);
-        await safeReply(msg, `📅 *Seus agendamentos:*\n\n${list}`);
-      }
-      
-      await safeReply(msg, menuText());
       return;
     }
     
-    await safeReply(msg, '❌ Opção inválida. Escolha uma das opções do menu:\n\n' + menuText());
+    await safeReply(msg, '❌ Opção inválida. Escolha uma das opções:\n\n' + menuText());
   } catch (error) {
-    console.error('[mainMenu] Erro:', error);
+    console.error('[mainMenu] ERRO CRÍTICO CAPTURADO:', error.message);
     await safeReply(msg, '❌ Ocorreu um erro. Tente novamente.\n\n' + menuText());
   }
 }
 
-/* ========================================================= 
- * FLUXO 3: CANCELAMENTO
- * =======================================================*/
-
 async function cancelExisting(session, msg, text) {
-  console.log('[cancelExisting] Opção:', text);
-  
-  // Voltar
-  if (text === '0' || text.toLowerCase() === 'voltar') {
-    session.step = 'mainMenu';
-    await msg.reply(menuText());
-    return;
-  }
-  
-  const index = parseInt(text, 10) - 1;
-  
-  if (Number.isNaN(index) || index < 0 || !session.appointments || index >= session.appointments.length) {
-    await msg.reply('❌ Opção inválida. Escolha um número da lista.');
-    return;
-  }
-  
-  const appointment = session.appointments[index];
-  const appointmentId = getProp(appointment, 'id', 'idAgendamento', 'IdAgendamento');
-  
-  console.log('[cancelExisting] Agendamento selecionado:', appointmentId);
-  console.log('[cancelExisting] Dados completos:', JSON.stringify(appointment, null, 2));
-  
-  if (!appointmentId) {
-    await msg.reply('❌ Erro ao identificar o agendamento.');
-    session.step = 'mainMenu';
-    await msg.reply(menuText());
-    return;
-  }
-  
   try {
-    // Buscar IDs dos serviços - pode vir de várias formas
-    let serviceIds = [];
+    console.log('[cancelExisting] Opção:', text);
     
-    // Tentar pegar de idServico direto
-    const directServiceId = getProp(appointment, 'idServico', 'servicoId', 'IdServico');
-    if (directServiceId) {
-      if (Array.isArray(directServiceId)) {
-        serviceIds = directServiceId;
-      } else {
-        serviceIds = [directServiceId];
-      }
-    }
-    
-    // Se não achou, tentar de agendamentoServico
-    if (serviceIds.length === 0) {
-      const agendamentoServico = getProp(appointment, 'agendamentoServico', 'AgendamentoServico');
-      if (Array.isArray(agendamentoServico) && agendamentoServico.length > 0) {
-        serviceIds = agendamentoServico
-          .map(item => getProp(item, 'idServico', 'servicoId', 'IdServico'))
-          .filter(Boolean);
-      }
-    }
-    
-    // Se ainda não achou, usar um ID padrão temporário
-    if (serviceIds.length === 0) {
-      console.warn('[cancelExisting] Nenhum serviço encontrado, usando ID padrão');
-      serviceIds = [1]; // ID temporário - ajuste conforme necessário
-    }
-    
-    console.log('[cancelExisting] Service IDs:', serviceIds);
-    
-    // Montar payload de atualização
-    const payload = {
-      idCliente: toNumber(getProp(appointment, 'idCliente', 'clienteId', 'IdCliente')),
-      idUsuario: toNumber(getProp(appointment, 'idUsuario', 'usuarioId', 'IdUsuario')),
-      idServico: serviceIds.map(id => toNumber(id)),
-      dataHoraInicio: getProp(appointment, 'dataHoraInicio', 'inicio'),
-      dataHoraFim: getProp(appointment, 'dataHoraFim', 'fim'),
-      valorTotal: toNumber(getProp(appointment, 'valorTotal'), 0),
-      statusAgendamento: 3, // CANCELADO (enum)
-      observacao: getProp(appointment, 'observacao') || 'Cancelado via WhatsApp'
-    };
-    
-    console.log('[cancelExisting] Payload para cancelamento:', JSON.stringify(payload, null, 2));
-    
-    await updateAppointment(appointmentId, payload);
-    await msg.reply('✅ Agendamento cancelado com sucesso!');
-  } catch (error) {
-    console.error('[cancelExisting] Erro ao cancelar:', error);
-    console.error('[cancelExisting] Resposta da API:', error?.response?.data);
-    await msg.reply('❌ Não foi possível cancelar o agendamento. Tente novamente.');
-  }
-  
-  session.step = 'mainMenu';
-  await msg.reply(menuText());
-}
-
-/* ========================================================= 
- * FLUXO 4: NOVO AGENDAMENTO
- * =======================================================*/
-
-async function service(session, msg, text) {
-  console.log('[service] Opção:', text);
-  
-  // Voltar
-  if (text === '0' || text.toLowerCase() === 'voltar') {
-    session.step = 'mainMenu';
-    await msg.reply(menuText());
-    return;
-  }
-  
-  const services = session.services || [];
-  const choice = parseChoice(text);
-  const idx = choice !== null ? choice - 1 : -1;
-  
-  if (idx < 0 || idx >= services.length) {
-    await msg.reply('❌ Opção inválida. Escolha um número da lista.');
-    return;
-  }
-  
-  session.service = services[idx];
-  
-  try {
-    const professionals = await listProfessionals();
-    session.professionals = professionals;
-    
-    if (professionals.length === 0) {
-      await msg.reply('❌ Nenhum profissional disponível no momento.');
+    if (text === '0' || text.toLowerCase() === 'voltar') {
       session.step = 'mainMenu';
-      await msg.reply(menuText());
+      await safeReply(msg, menuText());
       return;
     }
     
-    session.step = 'professional';
-    const lines = professionals.map((p, i) => {
-      const name = getProp(p, 'nomeInteiro', 'nome', 'nomeUsuario') || `Profissional ${i + 1}`;
-      return `*${i + 1}* - ${name}`;
-    });
+    const index = parseInt(text, 10) - 1;
     
-    await msg.reply(
-      `👤 Com qual profissional você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`
-    );
-  } catch (error) {
-    console.error('[service] Erro ao carregar profissionais:', error);
-    await msg.reply('❌ Não consegui carregar os profissionais. Tente novamente.');
+    if (Number.isNaN(index) || index < 0 || !session.appointments || index >= session.appointments.length) {
+      await safeReply(msg, '❌ Opção inválida. Escolha um número da lista.');
+      return;
+    }
+    
+    const appointment = session.appointments[index];
+    const appointmentId = getProp(appointment, 'id', 'idAgendamento', 'IdAgendamento');
+    
+    if (!appointmentId) {
+      await safeReply(msg, '❌ Erro ao identificar o agendamento.');
+      session.step = 'mainMenu';
+      await safeReply(msg, menuText());
+      return;
+    }
+    
+    try {
+      let serviceIds = [];
+      
+      const directServiceId = getProp(appointment, 'idServico', 'servicoId', 'IdServico');
+      if (directServiceId) {
+        serviceIds = Array.isArray(directServiceId) ? directServiceId : [directServiceId];
+      }
+      
+      if (serviceIds.length === 0) {
+        const agendamentoServico = getProp(appointment, 'agendamentoServico', 'AgendamentoServico');
+        if (Array.isArray(agendamentoServico) && agendamentoServico.length > 0) {
+          serviceIds = agendamentoServico
+            .map(item => getProp(item, 'idServico', 'servicoId', 'IdServico'))
+            .filter(Boolean);
+        }
+      }
+      
+      if (serviceIds.length === 0) {
+        console.warn('[cancelExisting] Nenhum serviço encontrado, usando ID padrão');
+        serviceIds = [1];
+      }
+      
+      const payload = {
+        idCliente: toNumber(getProp(appointment, 'idCliente', 'clienteId', 'IdCliente')),
+        idUsuario: toNumber(getProp(appointment, 'idUsuario', 'usuarioId', 'IdUsuario')),
+        idServico: serviceIds.map(id => toNumber(id)),
+        dataHoraInicio: getProp(appointment, 'dataHoraInicio', 'inicio'),
+        dataHoraFim: getProp(appointment, 'dataHoraFim', 'fim'),
+        valorTotal: toNumber(getProp(appointment, 'valorTotal'), 0),
+        statusAgendamento: 3, // CANCELADO
+        observacao: getProp(appointment, 'observacao') || 'Cancelado via WhatsApp'
+      };
+      
+      await updateAppointment(appointmentId, payload);
+      await safeReply(msg, '✅ Agendamento cancelado com sucesso!');
+      
+    } catch (error) {
+      console.error('[cancelExisting] ERRO ao cancelar:', error.message);
+      await safeReply(msg, '❌ Não foi possível cancelar o agendamento. Tente novamente.');
+    }
+    
     session.step = 'mainMenu';
-    await msg.reply(menuText());
+    await safeReply(msg, menuText());
+    
+  } catch (error) {
+    console.error('[cancelExisting] ERRO CRÍTICO CAPTURADO:', error.message);
+    session.step = 'mainMenu';
+    await safeReply(msg, '❌ Ocorreu um erro. Voltando ao menu.\n\n' + menuText());
+  }
+}
+
+async function service(session, msg, text) {
+  try {
+    console.log('[service] Opção:', text);
+    
+    if (text === '0' || text.toLowerCase() === 'voltar') {
+      session.step = 'mainMenu';
+      await safeReply(msg, menuText());
+      return;
+    }
+    
+    const services = session.services || [];
+    const choice = parseChoice(text);
+    const idx = choice !== null ? choice - 1 : -1;
+    
+    if (idx < 0 || idx >= services.length) {
+      await safeReply(msg, '❌ Opção inválida. Escolha um número da lista.');
+      return;
+    }
+    
+    session.service = services[idx];
+    
+    try {
+      const professionals = await listProfessionals();
+      session.professionals = professionals;
+      
+      if (professionals.length === 0) {
+        await safeReply(msg, '❌ Nenhum profissional disponível no momento.');
+        session.step = 'mainMenu';
+        await safeReply(msg, menuText());
+        return;
+      }
+      
+      session.step = 'professional';
+      const lines = professionals.map((p, i) => {
+        const name = getProp(p, 'nomeInteiro', 'nome', 'nomeUsuario') || `Profissional ${i + 1}`;
+        return `*${i + 1}* - ${name}`;
+      });
+      
+      await safeReply(msg, `👤 Com qual profissional você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`);
+      
+    } catch (error) {
+      console.error('[service] ERRO ao carregar profissionais:', error.message);
+      await safeReply(msg, '❌ Não foi possível carregar os profissionais.');
+      session.step = 'mainMenu';
+      await safeReply(msg, menuText());
+    }
+  } catch (error) {
+    console.error('[service] ERRO CRÍTICO CAPTURADO:', error.message);
+    session.step = 'mainMenu';
+    await safeReply(msg, '❌ Ocorreu um erro. Voltando ao menu.\n\n' + menuText());
   }
 }
 
 async function professional(session, msg, text) {
-  console.log('[professional] Opção:', text);
-  
-  // Voltar
-  if (text === '0' || text.toLowerCase() === 'voltar') {
-    session.step = 'service';
+  try {
+    console.log('[professional] Opção:', text);
     
-    const services = session.services || [];
-    const lines = services.map((s, i) => {
-      const name = getProp(s, 'descricao', 'nome') || `Serviço ${i + 1}`;
-      return `*${i + 1}* - ${name}`;
-    });
-    
-    await msg.reply(
-      `📋 Qual serviço você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`
-    );
-    return;
-  }
-  
-  const professionals = session.professionals || [];
-  const choice = parseChoice(text);
-  const idx = choice !== null ? choice - 1 : -1;
-  
-  if (idx < 0 || idx >= professionals.length) {
-    await msg.reply('❌ Opção inválida. Escolha um número da lista.');
-    return;
-  }
-  
-  session.professional = professionals[idx];
-  session.step = 'date';
-  
-  await msg.reply(
-    '📅 Qual o melhor dia para você?\n\n' +
-    'Digite a data no formato: *DD/MM/AAAA*\n' +
-    'Exemplo: 15/12/2025\n\n' +
-    '_Digite *0* para voltar._'
-  );
-}
-
-async function date(session, msg, text) {
-  console.log('[date] Data recebida:', text);
-  
-  // Voltar
-  if (text === '0' || text.toLowerCase() === 'voltar') {
-    session.step = 'professional';
+    if (text === '0' || text.toLowerCase() === 'voltar') {
+      session.step = 'service';
+      
+      const services = session.services || [];
+      const lines = services.map((s, i) => {
+        const name = getProp(s, 'descricao', 'nome') || `Serviço ${i + 1}`;
+        return `*${i + 1}* - ${name}`;
+      });
+      
+      await safeReply(msg, `📋 Qual serviço você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`);
+      return;
+    }
     
     const professionals = session.professionals || [];
-    const lines = professionals.map((p, i) => {
-      const name = getProp(p, 'nomeInteiro', 'nome', 'nomeUsuario') || `Profissional ${i + 1}`;
-      return `*${i + 1}* - ${name}`;
-    });
+    const choice = parseChoice(text);
+    const idx = choice !== null ? choice - 1 : -1;
     
-    await msg.reply(
-      `👤 Com qual profissional você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`
-    );
-    return;
-  }
-  
-  // Validar data
-  const isoDate = toIsoDate(text);
-  if (!isoDate) {
-    await msg.reply('❌ Data inválida. Use o formato *DD/MM/AAAA*.\n\n_Digite *0* para voltar._');
-    return;
-  }
-  
-  // Verificar se não é data passada
-  try {
-    const selectedDate = new Date(isoDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (selectedDate < today) {
-      await msg.reply('❌ Não é possível agendar em datas passadas.\n\n_Digite *0* para voltar._');
-      return;
-    }
-  } catch {}
-  
-  session.date = text;
-  session.isoDate = isoDate;
-  
-  try {
-    const allAppointments = await listAppointments();
-    const professionalId = getProp(session.professional, 'id', 'idUsuario', 'IdUsuario');
-    
-    const availableTimes = getAvailableTimes(allAppointments, professionalId, isoDate);
-    
-    if (availableTimes.length === 0) {
-      await msg.reply('❌ Não há horários disponíveis para este dia. Escolha outra data.');
+    if (idx < 0 || idx >= professionals.length) {
+      await safeReply(msg, '❌ Opção inválida. Escolha um número da lista.');
       return;
     }
     
-    session.times = availableTimes;
-    session.step = 'time';
-    
-    const lines = availableTimes.map((t, i) => `*${i + 1}* - ${t}`);
-    
-    await msg.reply(
-      `🕐 Horários disponíveis para ${text}:\n\n${lines.join('\n')}\n\n*0* - Voltar`
-    );
-  } catch (error) {
-    console.error('[date] Erro ao buscar horários:', error);
-    await msg.reply('❌ Não consegui carregar os horários disponíveis.');
-    session.step = 'mainMenu';
-    await msg.reply(menuText());
-  }
-}
-
-async function time(session, msg, text) {
-  console.log('[time] Opção:', text);
-  
-  // Voltar
-  if (text === '0' || text.toLowerCase() === 'voltar') {
+    session.professional = professionals[idx];
     session.step = 'date';
-    await msg.reply(
+    
+    await safeReply(msg,
       '📅 Qual o melhor dia para você?\n\n' +
       'Digite a data no formato: *DD/MM/AAAA*\n' +
       'Exemplo: 15/12/2025\n\n' +
       '_Digite *0* para voltar._'
     );
-    return;
+  } catch (error) {
+    console.error('[professional] ERRO CRÍTICO CAPTURADO:', error.message);
+    session.step = 'mainMenu';
+    await safeReply(msg, '❌ Ocorreu um erro. Voltando ao menu.\n\n' + menuText());
   }
-  
-  const times = session.times || [];
-  const choice = parseChoice(text);
-  const idx = choice !== null ? choice - 1 : -1;
-  
-  if (idx < 0 || idx >= times.length) {
-    await msg.reply('❌ Opção inválida. Escolha um número da lista.');
-    return;
-  }
-  
-  session.time = times[idx];
-  session.step = 'confirmAppointment';
-  
-  const serviceName = getProp(session.service, 'descricao', 'nome') || 'Serviço';
-  const professionalName = getProp(session.professional, 'nomeInteiro', 'nome', 'nomeUsuario') || 'Profissional';
-  
-  await msg.reply(
-    '✅ *Confirme seu agendamento:*\n\n' +
-    `📋 Serviço: ${serviceName}\n` +
-    `👤 Profissional: ${professionalName}\n` +
-    `📅 Data: ${session.date}\n` +
-    `🕐 Horário: ${session.time}\n\n` +
-    '*1* - Confirmar\n' +
-    '*2* - Cancelar e voltar ao menu\n' +
-    '*0* - Voltar'
-  );
 }
 
-async function confirmAppointment(session, msg, text) {
-  console.log('[confirmAppointment] Resposta:', text);
-  
-  // Voltar
-  if (text === '0' || text.toLowerCase() === 'voltar') {
-    session.step = 'time';
+async function date(session, msg, text) {
+  try {
+    console.log('[date] Data:', text);
     
-    const times = session.times || [];
-    const lines = times.map((t, i) => `*${i + 1}* - ${t}`);
+    if (text === '0' || text.toLowerCase() === 'voltar') {
+      session.step = 'professional';
+      
+      const professionals = session.professionals || [];
+      const lines = professionals.map((p, i) => {
+        const name = getProp(p, 'nomeInteiro', 'nome', 'nomeUsuario') || `Profissional ${i + 1}`;
+        return `*${i + 1}* - ${name}`;
+      });
+      
+      await safeReply(msg, `👤 Com qual profissional você deseja agendar?\n\n${lines.join('\n')}\n\n*0* - Voltar`);
+      return;
+    }
     
-    await msg.reply(
-      `🕐 Horários disponíveis:\n\n${lines.join('\n')}\n\n*0* - Voltar`
-    );
-    return;
-  }
-  
-  // Cancelar
-  if (text === '2') {
-    session.step = 'mainMenu';
-    await msg.reply('❌ Agendamento cancelado.\n\n' + menuText());
-    return;
-  }
-  
-  // Confirmar
-  if (text === '1') {
-    const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
-    const professionalId = getProp(session.professional, 'id', 'idUsuario', 'IdUsuario');
-    const serviceId = getProp(session.service, 'id', 'idServico', 'IdServico');
-    
-    if (!clientId || !professionalId || !serviceId) {
-      console.error('[confirmAppointment] Dados incompletos:', { clientId, professionalId, serviceId });
-      await msg.reply('❌ Erro ao processar o agendamento. Dados incompletos.');
-      session.step = 'mainMenu';
-      await msg.reply(menuText());
+    const isoDate = toIsoDate(text);
+    if (!isoDate) {
+      await safeReply(msg, '❌ Data inválida. Use o formato *DD/MM/AAAA*.\n\n_Digite *0* para voltar._');
       return;
     }
     
     try {
-      const dataHoraInicio = `${session.isoDate}T${session.time}:00`;
+      const selectedDate = new Date(isoDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       
-      const payload = {
-        idCliente: clientId,
-        idUsuario: professionalId,
-        idServico: [serviceId],
-        dataHoraInicio: dataHoraInicio,
-        observacao: 'Agendamento via WhatsApp'
-      };
-      
-      await createAppointment(payload);
-      
-      await msg.reply('✅ *Agendamento confirmado com sucesso!*');
-      session.step = 'mainMenu';
-      await msg.reply(menuText());
-    } catch (error) {
-      console.error('[confirmAppointment] Erro ao criar agendamento:', error);
-      await msg.reply('❌ Não foi possível confirmar o agendamento. Tente novamente.');
-      session.step = 'mainMenu';
-      await msg.reply(menuText());
+      if (selectedDate < today) {
+        await safeReply(msg, '❌ Não é possível agendar em datas passadas.\n\n_Digite *0* para voltar._');
+        return;
+      }
+    } catch (dateError) {
+      console.error('[date] Erro ao validar data:', dateError.message);
     }
-    return;
+    
+    session.date = text;
+    session.isoDate = isoDate;
+    
+    try {
+      const allAppointments = await listAppointments();
+      const professionalId = getProp(session.professional, 'id', 'idUsuario', 'IdUsuario');
+      
+      const availableTimes = getAvailableTimes(allAppointments, professionalId, isoDate);
+      
+      if (availableTimes.length === 0) {
+        await safeReply(msg, '❌ Não há horários disponíveis para este dia. Escolha outra data.');
+        return;
+      }
+      
+      session.times = availableTimes;
+      session.step = 'time';
+      
+      const lines = availableTimes.map((t, i) => `*${i + 1}* - ${t}`);
+      
+      await safeReply(msg, `🕐 Horários disponíveis para ${text}:\n\n${lines.join('\n')}\n\n*0* - Voltar`);
+      
+    } catch (error) {
+      console.error('[date] ERRO ao buscar horários:', error.message);
+      await safeReply(msg, '❌ Não foi possível carregar os horários disponíveis.');
+      session.step = 'mainMenu';
+      await safeReply(msg, menuText());
+    }
+  } catch (error) {
+    console.error('[date] ERRO CRÍTICO CAPTURADO:', error.message);
+    session.step = 'mainMenu';
+    await safeReply(msg, '❌ Ocorreu um erro. Voltando ao menu.\n\n' + menuText());
   }
-  
-  await msg.reply('❌ Opção inválida. Responda *1* para confirmar, *2* para cancelar ou *0* para voltar.');
+}
+
+async function time(session, msg, text) {
+  try {
+    console.log('[time] Opção:', text);
+    
+    if (text === '0' || text.toLowerCase() === 'voltar') {
+      session.step = 'date';
+      await safeReply(msg,
+        '📅 Qual o melhor dia para você?\n\n' +
+        'Digite a data no formato: *DD/MM/AAAA*\n' +
+        'Exemplo: 15/12/2025\n\n' +
+        '_Digite *0* para voltar._'
+      );
+      return;
+    }
+    
+    const times = session.times || [];
+    const choice = parseChoice(text);
+    const idx = choice !== null ? choice - 1 : -1;
+    
+    if (idx < 0 || idx >= times.length) {
+      await safeReply(msg, '❌ Opção inválida. Escolha um número da lista.');
+      return;
+    }
+    
+    session.time = times[idx];
+    session.step = 'confirmAppointment';
+    
+    const serviceName = getProp(session.service, 'descricao', 'nome') || 'Serviço';
+    const professionalName = getProp(session.professional, 'nomeInteiro', 'nome', 'nomeUsuario') || 'Profissional';
+    
+    await safeReply(msg,
+      '✅ *Confirme seu agendamento:*\n\n' +
+      `📋 Serviço: ${serviceName}\n` +
+      `👤 Profissional: ${professionalName}\n` +
+      `📅 Data: ${session.date}\n` +
+      `🕐 Horário: ${session.time}\n\n` +
+      '*1* - Confirmar\n' +
+      '*2* - Cancelar e voltar ao menu\n' +
+      '*0* - Voltar'
+    );
+  } catch (error) {
+    console.error('[time] ERRO CRÍTICO CAPTURADO:', error.message);
+    session.step = 'mainMenu';
+    await safeReply(msg, '❌ Ocorreu um erro. Voltando ao menu.\n\n' + menuText());
+  }
+}
+
+async function confirmAppointment(session, msg, text) {
+  try {
+    console.log('[confirmAppointment] Resposta:', text);
+    
+    if (text === '0' || text.toLowerCase() === 'voltar') {
+      session.step = 'time';
+      
+      const times = session.times || [];
+      const lines = times.map((t, i) => `*${i + 1}* - ${t}`);
+      
+      await safeReply(msg, `🕐 Horários disponíveis:\n\n${lines.join('\n')}\n\n*0* - Voltar`);
+      return;
+    }
+    
+    if (text === '2') {
+      session.step = 'mainMenu';
+      await safeReply(msg, '❌ Agendamento cancelado.\n\n' + menuText());
+      return;
+    }
+    
+    if (text === '1') {
+      const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
+      const professionalId = getProp(session.professional, 'id', 'idUsuario', 'IdUsuario');
+      const serviceId = getProp(session.service, 'id', 'idServico', 'IdServico');
+      
+      if (!clientId || !professionalId || !serviceId) {
+        console.error('[confirmAppointment] Dados incompletos:', { clientId, professionalId, serviceId });
+        await safeReply(msg, '❌ Erro ao processar o agendamento. Dados incompletos.');
+        session.step = 'mainMenu';
+        await safeReply(msg, menuText());
+        return;
+      }
+      
+      try {
+        const dataHoraInicio = `${session.isoDate}T${session.time}:00`;
+        
+        const payload = {
+          idCliente: clientId,
+          idUsuario: professionalId,
+          idServico: [serviceId],
+          dataHoraInicio: dataHoraInicio,
+          observacao: 'Agendamento via WhatsApp'
+        };
+        
+        await createAppointment(payload);
+        
+        await safeReply(msg, '✅ *Agendamento confirmado com sucesso!*');
+        session.step = 'mainMenu';
+        await safeReply(msg, menuText());
+        
+      } catch (error) {
+        console.error('[confirmAppointment] ERRO ao criar agendamento:', error.message);
+        
+        const status = error?.response?.status;
+        
+        if (status === 409) {
+          await safeReply(msg, '❌ Este horário já foi reservado. Escolha outro horário.');
+          session.step = 'time';
+        } else if (status === 400) {
+          await safeReply(msg, '❌ Dados inválidos. Vamos começar novamente.');
+          session.step = 'mainMenu';
+          await safeReply(msg, menuText());
+        } else {
+          await safeReply(msg, '❌ Não foi possível confirmar o agendamento. Tente novamente.');
+          session.step = 'mainMenu';
+          await safeReply(msg, menuText());
+        }
+      }
+      return;
+    }
+    
+    await safeReply(msg, '❌ Opção inválida. Responda *1* para confirmar, *2* para cancelar ou *0* para voltar.');
+    
+  } catch (error) {
+    console.error('[confirmAppointment] ERRO CRÍTICO CAPTURADO:', error.message);
+    session.step = 'mainMenu';
+    await safeReply(msg, '❌ Ocorreu um erro. Voltando ao menu.\n\n' + menuText());
+  }
 }
 
 /* ========================================================= 
