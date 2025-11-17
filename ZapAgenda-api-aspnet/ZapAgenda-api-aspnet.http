@@ -1,0 +1,4 @@
+@ZapAgenda_api_aspnet_HostAddress = http://localhost:5235
+
+GET {{ZapAgenda_api_aspnet_HostAddress}}/weatherforecast/
+Accept: application/json

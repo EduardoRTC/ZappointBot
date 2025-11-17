@@ -1,0 +1,62 @@
+.navegacao-calendario {
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.navegacao-calendario__itens {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 30px;
+    width: 100%;
+}
+
+.navegacao-calendario__funcionario {
+    color: black;
+    background-color: #F1F1F1;
+    font-family: "Poppins", sans-serif;
+    font-size: var(--16px);
+    border: 1px solid black;
+    padding: 5px;
+    margin-left: 5px;
+}
+
+.navegacao-calendario__data {
+    color: black;
+    font-size: var(--20px);
+    font-family: "Poppins", sans-serif;
+    font-weight: 500;
+}
+
+.navegacao-calendario__botao {
+    border: 1px solid black;
+    background-color: #F1F1F1;
+    font-family: "Poppins", sans-serif;
+    font-size: var(--18px);
+    margin-right: 5px;
+    margin-left: 5px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    cursor: pointer;
+}
+.navegacao-calendario__altera {
+    cursor: pointer;
+    border: none;
+    font-family: "Poppins", sans-serif;
+    font-size: var(--20px)
+}
+
+.navegacao-calendario__botoes {
+    display: flex;
+    align-items: center;
+    color: black;
+    margin-right: 25px;
+}
+
+.selecionado {
+    background-color: #161D30;
+    color: #ffff;
+}

@@ -1,0 +1,65 @@
+.fundo {
+    background-color: #070431;
+    background-image: linear-gradient(45deg, #070431 0%, #0d315e 100%);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+}
+
+.cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: right;
+    color: #ffff;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    width: 100%;
+    font-size: var(--20px);
+    padding-top: 10px;
+    margin-bottom: 100px;
+}
+
+.cabecalho__user {
+    margin-right: 10px;
+}
+
+.mensagem-erro {
+    color: red;
+    font-family: "Poppins", sans-serif;
+    font-style: italic;
+    font-size: var(--14px);
+    margin-bottom: 5px;
+}
+
+@media (max-width: 475px) {
+    .cabecalho {
+        font-size: var(--15px);
+        padding: 0;
+        margin-right: 20px;
+        width: 100%;
+    }
+
+    .login__form__titulo {
+        font-size: var(--30px);
+    }
+    .fundo {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 390px) {
+    .cabecalho {
+        padding-top: 25px;
+    }
+
+    .cabecalho__texto {
+        margin-right: 20px;
+    }
+
+    .login__form__titulo {
+        font-size: var(--24px);
+    }
+}

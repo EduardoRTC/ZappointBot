@@ -1,0 +1,13 @@
+bin
+obj
+.vscode
+.git
+.gitignore
+Dockerfile
+docker-compose*.yml
+*.user
+*.suo
+*.swp
+*.log
+.env
+**/*.Development.json

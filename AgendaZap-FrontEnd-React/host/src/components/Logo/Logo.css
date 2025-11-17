@@ -1,0 +1,32 @@
+.logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 2.5em;
+}
+
+.logo__imagem {
+    margin-bottom: 0.5em;
+}
+
+.logo__titulo {
+    color: #ffff;
+    font-weight: 600;
+    font-size: var(--36px);
+    font-family: "Poppins", serif;
+}
+
+@media (max-width:475px) {
+    .logo__titulo {
+        font-size: var(--36px);
+    }
+}
+
+@media (max-width:390px) {
+    .logo__titulo {
+        font-size: var(--36px);
+    }
+    .logo__imagem {
+        width: 75%;
+    }
+}

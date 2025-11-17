@@ -1,0 +1,65 @@
+.proximos-agendamentos {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    width: 100%;
+}
+
+.proximos-agendamentos__titulo {
+    background-color: #161D30;
+    color: white;
+    font-size: var(--14px);
+    font-weight: 600;
+    font-family: "Poppins", sans-serif;
+    width: 70%;
+    padding-top: 15px;
+    padding-bottom: 15px;
+    text-align: center;
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+}
+
+.proximos-agendamentos__atendimentos {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    background-color: #EDEDED ;
+    width: 70%;
+    height: 130px;
+    border-bottom-left-radius: 7px;
+    border-bottom-right-radius: 7px;
+}
+
+.proximos-agendamentos__atendimento {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    margin-left: 5px;
+    margin-top: 10px;
+    background-color: white ;
+    border-radius: 8px;
+    width: 95%;
+    padding-bottom: 5px;
+    padding-top: 5px;
+}
+
+.proximos-agendamentos__cliente {
+    margin-left: 5px;
+    font-family: "Poppins",sans-serif;
+    font-size: var(--14px);
+    text-align: center;
+}
+
+.proximos-agendamentos__horario {
+    background-color: #7DC588 ;
+    color: #FFFFFF;
+    font-family: "Poppins", sans-serif;
+    font-weight: 400;
+    font-size: var(--12px);
+    border-radius: 4px;
+    width: 15%;
+    text-align: center;
+    padding: 3px;
+    margin-left: 5px;
+}

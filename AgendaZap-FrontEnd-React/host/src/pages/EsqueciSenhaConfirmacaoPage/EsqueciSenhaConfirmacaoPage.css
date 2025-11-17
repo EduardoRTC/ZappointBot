@@ -1,0 +1,71 @@
+.confirmacao-senha {
+    background-color: #070431;
+    background-image: linear-gradient(45deg, #070431 0%, #0d315e 100%);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.confirmacao-senha__form {
+    width: 459px;
+    height: 600px;
+    background-color: #202D55;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.balao-texto {
+    display: flex;
+    align-items: center;
+    position: relative;
+    background: #080B38;
+    border-radius: 1em;
+    color: white;
+    font-family: "Poppins", sans-serif;
+    line-height: 1.5;
+    font-size: var(--16px);
+    width: 80%;
+    margin-left: 20px;
+    padding-left: 20px;
+    text-align: left;
+    height: 10%;
+    box-shadow: rgba(0, 0, 0, 0.09) 0px 2px 1px, rgba(0, 0, 0, 0.09) 0px 4px 2px, rgba(0, 0, 0, 0.09) 0px 8px 4px, rgba(0, 0, 0, 0.09) 0px 16px 8px, rgba(0, 0, 0, 0.09) 0px 32px 16px;
+    margin-bottom: 30px;
+}
+
+.balao-texto:after {
+    content: '';
+    position: absolute;
+    top: 1;
+    left: 40%;
+    width: 8px;
+    height: 0;
+    border: 1.219em solid transparent;
+    border-bottom-color: #080B38;
+    border-top: 0;
+    border-right: 0;
+    margin-left: -3.5em;
+    margin-top: -5em;
+}
+
+.confirmacao-senha__inputs {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.confirmacao-senha__botao {
+    font-family: "Poppins" sans-serif;
+    color: #18244A;
+    background-color: #fff;
+    border-radius: 10px;
+    width: 25%;
+    height: 1.8rem;
+    margin-top: 2.5px;
+    font-size: var(--16px);
+    border: 1px solid white;
+}

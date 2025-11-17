@@ -1,0 +1,50 @@
+.login__form {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    width: 50%;
+}
+
+.login__form__logar {
+    display: flex;
+    flex-direction: column;
+}
+
+.login__form__esqueci-senha {
+    font-family: "Poppins", serif;
+    font-weight: 300;
+    font-style: italic;
+    color: #dddd;
+    text-decoration: none;
+    width: 65%;
+    font-size: var(--14px);
+}
+
+.login__form__botao {
+    font-family: "Poppins" sans-serif;
+    color: #18244A;
+    background-color: #fff;
+    border-radius: 10px;
+    width: 25%;
+    height: 1.8rem ;
+    margin-top: 15px;
+    font-size: var(--16px);
+    border: 1px solid white;
+    cursor: pointer;
+}
+
+@media (max-width: 1024px) {
+    .login__form__logar {
+        width: 90%;
+    }
+}
+
+@media (max-width:475px) {
+    .login__form__botao {
+        width: 40%;
+    }
+    .login__form__esqueci-senha {
+        width: 100%;
+    }
+}

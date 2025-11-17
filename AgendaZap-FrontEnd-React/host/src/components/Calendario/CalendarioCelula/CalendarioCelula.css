@@ -1,0 +1,33 @@
+.calendario-celula {
+    border: 1px solid #dadada;
+    background-color: #FFFFFF;
+    height: 100px;
+    width: 99%;
+    cursor: pointer;
+}
+
+.calendario-celula:hover {
+    border: 1px solid #0F1938;
+}
+
+.calendario-celula__dia {
+    font-family: "Poppins" , sans-serif;
+    font-size: var(--14px);
+    color: black;
+    padding: 10px
+}
+
+.hoje {
+    border: 1.5px solid #0F1938;
+}
+
+.calendario-celula--fora-mes {
+    pointer-events: none;
+    cursor: not-allowed;
+    background-color: #F4F4F4;
+    color: #909090;
+}
+
+.calendario-celula__dia--fora-mes {
+    color: #909090;
+}

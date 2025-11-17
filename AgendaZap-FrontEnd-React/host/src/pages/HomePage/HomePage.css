@@ -1,0 +1,29 @@
+.home-page {
+    height: 100vh;
+    display: grid;
+    grid-template-areas:
+        "header header header"
+        "side-bar calendario agendamento";
+    grid-template-columns: 0.8fr 4.1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    overflow: hidden;
+}
+
+.home-page__cabecalho {
+    grid-area: header;
+}
+
+.home-page__side-bar {
+    grid-area: side-bar;
+    width: 135%;
+}
+
+.home-page__calendario{
+    margin-top: 50px;
+    grid-area: "calendario";
+}
+
+.home-page__agendamentos{
+    margin-top: 50px;
+    grid-area: "agendamento";
+}

@@ -1,0 +1,86 @@
+.login {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.login__container__livro {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+}
+
+.login__container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 40px;
+    background: linear-gradient(to right, #202D55 50%, #18244A 50%);
+    height: 70vh;
+    width: 1100px;
+    box-shadow: 0px 2px 1px 0px black;
+}
+
+.login__container__imagem {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 5em;
+}
+
+.login__celular {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 1024px) {
+    .login__container__imagem {
+        width: 30%;
+    }
+}
+
+@media (max-width: 768px) {
+    .login__container__calendario-imagem {
+        width: 150%;
+    }
+}
+
+@media (max-width: 640px) {
+    .login__container__calendario-imagem {
+        width: 150%;
+        margin-right: 60px;
+    }
+}
+
+@media (max-width: 475px) {
+    .login__container {
+        width: 400px;
+    }
+
+    .login__form__logo__imagem {
+        width: 150px;
+    }
+
+    .login__container__calendario-imagem {
+        height: 200px;
+        width: 200px;
+    }
+}
+
+@media (max-width: 390px) {
+    .login__container {
+        width: 350px;
+    }
+
+    .login__form__logo__imagem {
+        width: 125px;
+    }
+
+    .login__container__calendario-imagem {
+        height: 180px;
+        width: 180px;
+        margin-right: 100px;
+    }
+}

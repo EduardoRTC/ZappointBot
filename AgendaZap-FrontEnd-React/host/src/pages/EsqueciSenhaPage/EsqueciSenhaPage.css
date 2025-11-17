@@ -1,0 +1,87 @@
+.esqueci-senha {
+    background-color: #070431;
+    background-image: linear-gradient(45deg, #070431 0%, #0d315e 100%);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.esqueci-senha__mensagem {
+    width: 50%;
+}
+
+.speech-bubble {
+    display: flex;
+    align-items: center;
+    position: relative;
+    background: #202D55;
+    border-radius: .8em;
+    color: white;
+    font-family: "Poppins", sans-serif;
+    line-height: 1.5;
+    font-size: var(--20px);
+    width: 85%;
+    margin-left: 20px;
+    padding-left: 20px;
+    text-align: left;
+    height: 30%;
+    box-shadow: rgba(0, 0, 0, 0.09) 0px 2px 1px, rgba(0, 0, 0, 0.09) 0px 4px 2px, rgba(0, 0, 0, 0.09) 0px 8px 4px, rgba(0, 0, 0, 0.09) 0px 16px 8px, rgba(0, 0, 0, 0.09) 0px 32px 16px;
+}
+
+.speech-bubble:after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border: 1.219em solid transparent;
+    border-bottom-color: #202D55;
+    border-top: 0;
+    border-right: 0;
+    margin-left: -3.5em;
+    margin-top: -1.219em;
+}
+
+.esqueci-senha__botao {
+    display: flex;
+    justify-content: end;
+    width: 92%;
+}
+
+@media (max-width:1024px) {
+    .speech-bubble {
+        font-size: var(--16px);
+        padding-right: 15px;
+    }
+    .esqueci-senha__botao {
+        width: 99%;
+    }
+}
+
+@media (max-width:768px) {
+    .speech-bubble {
+        font-size: var(--14px);
+        padding-right: 7px;
+    }
+}
+
+@media (max-width:640px) {
+    .speech-bubble {
+        font-size: var(--10px);
+        width: 80%;
+    }
+}
+
+@media (max-width:475px) {
+    .speech-bubble {
+        width: 75%;
+    }
+}
+
+@media (max-width:390px) {
+    .speech-bubble {
+        width: 70%;
+    }
+}

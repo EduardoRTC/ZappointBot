@@ -1,0 +1,16 @@
+.BotaoLink {
+    border: 1px solid #fff;
+    color: #18244A;
+    font-family: "Poppins", serif;
+    background-color: #ffff;
+    border-radius: 8px;
+    height: 0.4em;
+    width: 91px;
+    font-size: var(--16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    margin-top: 15px;
+    padding: 10px 5px 10px 5px;
+}

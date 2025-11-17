@@ -1,0 +1,33 @@
+.calendario {
+    background-color: #E9E9E9;
+    border-radius: 25px ;
+    padding-bottom: 20px;
+    padding-right: 20px;
+    padding-top: 20px;
+}   
+
+.rbc-calendar {
+    background-color: #E9E9E9 !important ;
+    font-family: "Poppins";
+}
+
+
+.rbc-day-bg:not(.rbc-today) {
+  background-color: #fff !important;
+}
+
+.rbc-toolbar button {
+     background-color: #fff;
+     color: black;
+}
+
+.rbc-header {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.rbc-toolbar button.rbc-active {
+  background-color: #161D30 !important;
+  color: #fff !important; 
+
+}
