@@ -255,6 +255,28 @@ async function listAppointments() {
   }
 }
 
+async function listAppointmentsByClientCPF(cpf) {
+  const cleanCPF = sanitizeCPF(cpf);
+  const url = joinUrl(companyBaseUrl, 'agendamento', 'cliente', cleanCPF);
+  
+  console.log('[listAppointmentsByClientCPF] Buscando agendamentos para CPF:', cleanCPF);
+  
+  try {
+    const resp = await axios.get(url);
+    return normalizeList(resp.data);
+  } catch (error) {
+    const status = error?.response?.status;
+    
+    if (status === 404) {
+      console.log('[listAppointmentsByClientCPF] Nenhum agendamento encontrado');
+      return [];
+    }
+    
+    console.error('[listAppointmentsByClientCPF] ERRO:', error.message);
+    throw error;
+  }
+}
+
 async function createAppointment(data) {
   const url = joinUrl(companyBaseUrl, 'agendamento');
   
@@ -724,19 +746,18 @@ async function mainMenu(session, msg, text, sessions) {
       return;
     }
     
-    // 2 - Cancelar agendamento
+    // 2 - Cancelar agendamento (MODIFICADO - usa CPF)
     if (text === '2') {
       try {
-        const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
+        const cpf = session.cpf;
         
-        if (!clientId) {
-          await safeReply(msg, '❌ Erro ao identificar seu cadastro.');
+        if (!cpf) {
+          await safeReply(msg, '❌ Erro ao identificar seu CPF.');
           await safeReply(msg, menuText());
           return;
         }
         
-        const allAppointments = await listAppointments();
-        const clientAppointments = getClientAppointments(allAppointments, clientId);
+        const clientAppointments = await listAppointmentsByClientCPF(cpf);
         const cancelable = getCancelableAppointments(clientAppointments);
         
         if (cancelable.length === 0) {
@@ -757,19 +778,18 @@ async function mainMenu(session, msg, text, sessions) {
       return;
     }
     
-    // 3 - Ver meus agendamentos
+    // 3 - Ver meus agendamentos (MODIFICADO - usa CPF)
     if (text === '3') {
       try {
-        const clientId = getProp(session.client, 'id', 'idCliente', 'IdCliente');
+        const cpf = session.cpf;
         
-        if (!clientId) {
-          await safeReply(msg, '❌ Erro ao identificar seu cadastro.');
+        if (!cpf) {
+          await safeReply(msg, '❌ Erro ao identificar seu CPF.');
           await safeReply(msg, menuText());
           return;
         }
         
-        const allAppointments = await listAppointments();
-        const clientAppointments = getClientAppointments(allAppointments, clientId);
+        const clientAppointments = await listAppointmentsByClientCPF(cpf);
         
         clientAppointments.sort((a, b) => {
           const dateA = new Date(getProp(a, 'dataHoraInicio', 'inicio') || 0);
@@ -1187,5 +1207,6 @@ module.exports = {
   time,
   confirmAppointment,
   finalizeSession,
-  safeReply
+  safeReply,
+  listAppointmentsByClientCPF
 };

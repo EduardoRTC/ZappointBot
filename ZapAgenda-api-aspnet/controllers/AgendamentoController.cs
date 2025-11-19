@@ -55,6 +55,21 @@ namespace ZapAgenda_api_aspnet.controllers
                 return Ok(agendamento.Value);
             }
 
+            [HttpGet("cliente/{cpf}")]
+        public async Task<IActionResult> GetAllByClienteCpf([FromRoute] string cpf, Guid IdEmpresa)
+        {
+            var agendamentos = await _agendamentoRepo.GetAllByClienteCpfAsync(cpf, IdEmpresa);
+
+            if (agendamentos.IsFailed)
+            {
+                // Aqui podem vir erros de "CPF inválido" ou "Cliente não encontrado"
+                // Se quiser tratar CPF inválido como 400, depois dá pra diferenciar pela mensagem.
+                return BadRequest(agendamentos.Errors);
+            }
+
+            return Ok(agendamentos.Value); // List<AgendamentoDto>
+        }
+
         //[Authorize]
         [HttpPut("{IdAgendamento}")]
         public async Task<IActionResult> Update([FromBody] UpdateAgendamentoDto updateAgendamentoDto, [FromRoute] int IdAgendamento, Guid IdEmpresa)

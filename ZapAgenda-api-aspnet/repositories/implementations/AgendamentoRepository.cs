@@ -44,8 +44,35 @@ namespace ZapAgenda_api_aspnet.repositories.implementations
             return Result.Ok(agendamentoDtos);
         }
 
+    public async Task<Result<List<AgendamentoDto>>> GetAllByClienteCpfAsync(string cpf, Guid idEmpresa)
+    {
+        // 1) Buscar cliente pelo CPF dentro da empresa
+        var clienteResult = await _clienteRepo.GetByCpf(cpf, idEmpresa);
+        if (clienteResult.IsFailed)
+        {
+            // Já vem com "CPF inválido" ou "Cliente não encontrado..."
+            return Result.Fail(clienteResult.Errors);
+        }
 
+        var cliente = clienteResult.Value;
 
+        // 2) Buscar todos os agendamentos do cliente na empresa
+        var agendamentosQuery = _context.Agendamento
+            .Include(a => a.Cliente)
+            .Include(a => a.Usuario)
+            .Include(a => a.AgendamentoServico)
+                .ThenInclude(asv => asv.Servico)
+            .Where(a => a.IdEmpresa == idEmpresa && a.IdCliente == cliente.Id);
+
+        var agendamentos = await agendamentosQuery.ToListAsync();
+
+        // 3) Mapear para DTO
+        var agendamentoDtos = agendamentos
+            .Select(a => a.ToAgendamentoDto())
+            .ToList();
+
+        return Result.Ok(agendamentoDtos);
+    }
 
         public async Task<Result<Agendamento>> GetById(int IdAgendamento, Guid IdEmpresa)
         {
