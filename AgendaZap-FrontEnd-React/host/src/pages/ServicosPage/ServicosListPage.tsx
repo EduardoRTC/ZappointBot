@@ -7,6 +7,7 @@ import { paths } from "../../paths";
 import { ServicosPresenter } from "../../presenters/ServicosPresenter";
 import ServicoDelete from "../../useCases/servico/ServicoDelete";
 import ServicoGetAll from "../../useCases/servico/ServicoGetAll";
+import { UseVerificaEmpresa } from "../../hooks/UseVerificaEmpresa";
 
 export default function ServicosListPage() {
     const [servicos, setServicos] = useState<ServicosPresenter[]>([]);

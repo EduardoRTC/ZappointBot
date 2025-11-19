@@ -3,6 +3,7 @@ import FuncionarioForm from "../../components/Forms/UsuarioForm/FuncionarioForm"
 import UsuarioGetById from "../../useCases/usuario/UsuarioGetById";
 import FuncionariosPresenter from "../../presenters/FuncionariosPresenter";
 import { useEffect, useState } from "react";
+import { UseVerificaEmpresa } from "../../hooks/UseVerificaEmpresa";
 
 export default function FuncionariosEditPage() {
     const { idEmpresa, id } = useParams<{ idEmpresa: string; id: string }>();
