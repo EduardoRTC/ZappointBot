@@ -2,7 +2,8 @@ import React, { useMemo, useState } from "react";
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, IconButton, TextField, Stack, Typography, Box, TablePagination,
-  Button
+  Button,
+  useMediaQuery
 } from "@mui/material";
 import { Edit, Delete, Add } from "@mui/icons-material";
 
@@ -38,6 +39,8 @@ export function GenericTable<T extends Record<string, any>>({
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
 
+  const isMobile = useMediaQuery("(max-width: 700px)");
+
   const filteredData = useMemo(() => {
     if (!search.trim()) return data;
     const lower = search.toLowerCase();
@@ -60,9 +63,23 @@ export function GenericTable<T extends Record<string, any>>({
 
   return (
     <Paper sx={{ p: 2 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6">{title}</Typography>
-        <Stack direction='row' spacing={2}>
+      {/* HEADER RESPONSIVO */}
+      <Stack
+        direction={isMobile ? "column" : "row"}
+        spacing={2}
+        justifyContent="space-between"
+        alignItems={isMobile ? "stretch" : "center"}
+        mb={2}
+      >
+        <Typography variant="h6" textAlign={isMobile ? "center" : "left"}>
+          {title}
+        </Typography>
+
+        <Stack
+          direction="row"
+          spacing={2}
+          justifyContent={isMobile ? "center" : "flex-start"}
+        >
           <Button
             variant="contained"
             onClick={onCreate}
@@ -77,8 +94,10 @@ export function GenericTable<T extends Record<string, any>>({
           >
             <Add sx={{ color: "#fff" }} />
           </Button>
+
           <TextField
             size="small"
+            fullWidth={isMobile}
             placeholder={searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -86,16 +105,29 @@ export function GenericTable<T extends Record<string, any>>({
         </Stack>
       </Stack>
 
-      <TableContainer>
-        <Table>
+      {/* SCROLL HORIZONTAL AUTOMÁTICO */}
+      <TableContainer sx={{ overflowX: "auto" }}>
+        <Table size={isMobile ? "small" : "medium"}>
           <TableHead>
             <TableRow>
               {columns.map((col) => (
-                <TableCell key={String(col.field)} style={{ width: col.width }}>
-                  <strong>{col.headerName}</strong>
+                <TableCell
+                  key={String(col.field)}
+                  style={{ width: col.width }}
+                  sx={{
+                    whiteSpace: "nowrap",
+                    fontWeight: "bold"
+                  }}
+                >
+                  {col.headerName}
                 </TableCell>
               ))}
-              {(onEdit || onDelete) && <TableCell align="center"><strong>Ações</strong></TableCell>}
+
+              {(onEdit || onDelete) && (
+                <TableCell align="center" sx={{ whiteSpace: "nowrap", fontWeight: "bold" }}>
+                  Ações
+                </TableCell>
+              )}
             </TableRow>
           </TableHead>
 
@@ -103,13 +135,14 @@ export function GenericTable<T extends Record<string, any>>({
             {paginatedData.map((row) => (
               <TableRow key={getRowId ? getRowId(row) : (row.id ?? JSON.stringify(row))}>
                 {columns.map((col) => (
-                  <TableCell key={String(col.field)}>
+                  <TableCell key={String(col.field)} sx={{ whiteSpace: "nowrap" }}>
                     {col.render ? col.render(row[col.field], row) : row[col.field]}
                   </TableCell>
                 ))}
+
                 {(onEdit || onDelete) && (
                   <TableCell align="center">
-                    <Stack direction="row" justifyContent="center">
+                    <Stack direction="row" justifyContent="center" spacing={1}>
                       {onEdit && (
                         <IconButton color="primary" onClick={() => onEdit(row)}>
                           <Edit />
@@ -137,7 +170,6 @@ export function GenericTable<T extends Record<string, any>>({
         </Table>
       </TableContainer>
 
-      {/* 📄 Paginação */}
       <TablePagination
         component="div"
         count={filteredData.length}
