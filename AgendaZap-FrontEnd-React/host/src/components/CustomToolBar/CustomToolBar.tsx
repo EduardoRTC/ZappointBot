@@ -15,12 +15,11 @@ const CustomToolbar = ({ selectedFuncionario, onFuncionarioChange, ...props }: C
   const { idEmpresa } = useParams<{ idEmpresa: string }>();
   const [usuarios, setUsuarios] = useState<FuncionariosPresenter[]>([]);
 
-  // Função para buscar usuários
   const fetchUsuarios = async () => {
     if (!idEmpresa) return;
     try {
       const usuarioService = new UsuarioGetAll();
-      const data: FuncionariosPresenter[] = await usuarioService.execute(idEmpresa);
+      const data = await usuarioService.execute(idEmpresa);
       setUsuarios(data);
     } catch (err) {
       console.error("Erro ao carregar funcionários:", err);
@@ -42,8 +41,27 @@ const CustomToolbar = ({ selectedFuncionario, onFuncionarioChange, ...props }: C
   });
 
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-      <FormControl size="small" sx={{ minWidth: 200 }}>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+
+        /** DESKTOP = linha única | MOBILE = quebra */
+        flexWrap: "wrap",
+        gap: 10,
+        marginBottom: 10,
+      }}
+    >
+
+      {/* SELECT — desktop fica 200px — mobile ocupa 100% */}
+      <FormControl
+        size="small"
+        sx={{
+          minWidth: { xs: "100%", sm: "100%", md: 200 },
+          flexGrow: { xs: 1, sm: 1, md: 0 },
+        }}
+      >
         <Select
           value={selectedFuncionario}
           onChange={(e) => onFuncionarioChange(e.target.value as string)}
@@ -74,19 +92,52 @@ const CustomToolbar = ({ selectedFuncionario, onFuncionarioChange, ...props }: C
         </Select>
       </FormControl>
 
-      <div style={{ fontWeight: "bold", fontSize: 16, fontFamily: "Poppins, sans-serif" }}>
+      {/* LABEL — desktop mantém inline — mobile quebra e centraliza */}
+      <div
+        style={{
+          fontWeight: "bold",
+          fontSize: 16,
+          fontFamily: "Poppins, sans-serif",
+
+          /** Desktop = largura automática | Mobile = ocupa linha inteira */
+          width: "auto",
+          textAlign: "center",
+
+          /** Ajusta para mobile (<900px) */
+          flexGrow: 1,
+        }}
+      >
         {label}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center" }}>
+      {/* BOTÕES — desktop fica inline — mobile centraliza */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+
+          /** Desktop = auto | Mobile = ocupa linha inteira e centraliza */
+          flexGrow: 0,
+          width: "auto",
+
+          justifyContent: "center",
+        }}
+      >
         <Button
           onClick={() => onNavigate?.("PREV")}
-          sx={{ minWidth: 32, border: "none", color: "#000", fontWeight: "bold", fontFamily: "Poppins, sans-serif" }}
+          sx={{
+            minWidth: 32,
+            border: "none",
+            color: "#000",
+            fontWeight: "bold",
+            fontFamily: "Poppins, sans-serif",
+          }}
         >
           {"<"}
         </Button>
 
-        <Box display="flex" ml={1} gap={1}>
+        <Box display="flex" gap={1}>
           <Button onClick={() => onView?.("month")} sx={getButtonStyles("month")}>
             Mês
           </Button>
@@ -100,7 +151,13 @@ const CustomToolbar = ({ selectedFuncionario, onFuncionarioChange, ...props }: C
 
         <Button
           onClick={() => onNavigate?.("NEXT")}
-          sx={{ minWidth: 32, border: "none", color: "#000", fontWeight: "bold", fontFamily: "Poppins, sans-serif", ml: 1 }}
+          sx={{
+            minWidth: 32,
+            border: "none",
+            color: "#000",
+            fontWeight: "bold",
+            fontFamily: "Poppins, sans-serif",
+          }}
         >
           {">"}
         </Button>
