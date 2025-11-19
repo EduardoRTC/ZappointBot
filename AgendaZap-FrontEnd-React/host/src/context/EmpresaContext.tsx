@@ -17,18 +17,19 @@ export const EmpresaProvider = ({ children }: { children: React.ReactNode }) => 
             // 1) PEGAR TOKEN DO LOCALSTORAGE
             // ---------------------------
             const token = localStorage.getItem("accessToken");
+            if (!token) {
+                console.log('não tem token');
+                setEmpresaExiste(false);
+            }
 
             // ---------------------------
             // 2) DECODE DO PAYLOAD DO JWT
-            // ---------------------------
+            // // ---------------------------
             const base64Payload = token.split(".")[1];
             const jsonPayload = JSON.parse(atob(base64Payload));
 
             // Supondo que o campo no JWT seja "empresaId"
             const empresaIdToken = jsonPayload.empresaid;
-            console.log(empre);
-
-
 
             // ---------------------------
             // 3) COMPARAR COM O PARAMETRO
@@ -36,9 +37,8 @@ export const EmpresaProvider = ({ children }: { children: React.ReactNode }) => 
             if (empresaIdToken !== idEmpresa) {
                 console.log('entrou aqui');
                 setEmpresaExiste(false);
-                return; // não chama API se já está errado
+                return
             }
-
 
             // ---------------------------
             // 4) CHAMAR API APÓS VALIDAÇÃO DO TOKEN

@@ -127,6 +127,7 @@ function App() {
 					</Route>
 
 					<Route path="*" element={<NotFoundPage />} />
+					<Route path="notfound" element={<NotFoundPage />} />
 				</Routes>
 			</EmpresaProvider>
 		</Router>

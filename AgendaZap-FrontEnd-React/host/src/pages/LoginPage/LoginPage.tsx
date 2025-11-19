@@ -20,9 +20,9 @@ const ErrorFallback: React.FC<TErrorFallBack> = ({ error, resetErrorBoundary }) 
 export default function LoginPage() {
     const { idEmpresa } = useParams<{ idEmpresa: string }>();
     const isMobile = useMediaQuery({ query: '(min-width: 475px)' });
-    if (idEmpresa) {
-        UseVerificaEmpresa(idEmpresa);
-    }
+    // if (idEmpresa) {
+    //     UseVerificaEmpresa(idEmpresa);
+    // }
 
     if (isMobile) {
         return (
