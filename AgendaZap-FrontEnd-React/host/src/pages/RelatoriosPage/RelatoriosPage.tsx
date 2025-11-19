@@ -1,3 +1,4 @@
+import { useParams } from "react-router-dom";
 import Relatorios from "../../components/Relatorios/Relatorios";
 import { UseVerificaEmpresa } from "../../hooks/UseVerificaEmpresa";
 
