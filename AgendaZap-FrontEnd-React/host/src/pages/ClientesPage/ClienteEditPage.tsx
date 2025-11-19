@@ -4,10 +4,14 @@ import ClientesPresenter from "../../presenters/ClientesPresenter";
 import { useParams } from "react-router-dom";
 import ClientesGetById from "../../useCases/clientes/ClientesGetById";
 import { toast } from "sonner";
+import { UseVerificaEmpresa } from "../../hooks/UseVerificaEmpresa";
 
 export default function ClienteEditPage() {
     const [cliente, setCliente] = useState<ClientesPresenter>()
     const { idEmpresa, id } = useParams<{ idEmpresa: string; id: string }>()
+    if (idEmpresa) {
+            UseVerificaEmpresa(idEmpresa);
+        }
 
     useEffect(() => {
         const fetchCliente = async () => {

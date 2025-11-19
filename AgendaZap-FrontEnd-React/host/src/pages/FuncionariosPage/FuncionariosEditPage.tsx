@@ -6,6 +6,9 @@ import { useEffect, useState } from "react";
 
 export default function FuncionariosEditPage() {
     const { idEmpresa, id } = useParams<{ idEmpresa: string; id: string }>();
+    if (idEmpresa) {
+            UseVerificaEmpresa(idEmpresa);
+        }
     const [funcionario, setFuncionario] = useState<FuncionariosPresenter | null>(null);
     const usuarioGetById = new UsuarioGetById();
 

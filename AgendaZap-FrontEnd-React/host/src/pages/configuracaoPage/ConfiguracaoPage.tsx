@@ -3,9 +3,13 @@ import { useParams } from "react-router-dom";
 import EmpresaForm from "../../components/Forms/empresaForm/EmpresaForm";
 import EmpresaGetById from "../../useCases/empresas/EmpresaGetById";
 import { EmpresaPresenter } from "../../presenters/EmpresaPresenter";
+import { UseVerificaEmpresa } from "../../hooks/UseVerificaEmpresa";
 
 export default function ConfiguracaoPage() {
   const { idEmpresa } = useParams<{ idEmpresa: string }>();
+  if (idEmpresa) {
+    UseVerificaEmpresa(idEmpresa);
+  }
   const [empresa, setEmpresa] = useState<EmpresaPresenter | null>(null);
   const empresaGetById = new EmpresaGetById();
 

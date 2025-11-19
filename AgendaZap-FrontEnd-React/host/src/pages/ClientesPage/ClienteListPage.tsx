@@ -7,10 +7,14 @@ import { toast } from "sonner";
 import { paths } from "../../paths";
 import ClientesDelete from "../../useCases/clientes/ClientesDelete";
 import { Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Button } from "@mui/material";
+import { UseVerificaEmpresa } from "../../hooks/UseVerificaEmpresa";
 
 export default function ClienteListPage() {
     const [clientes, setClientes] = useState<ClientesPresenter[]>([]);
     const { idEmpresa } = useParams<{ idEmpresa: string }>();
+    if (idEmpresa) {
+            UseVerificaEmpresa(idEmpresa);
+        }
     const navigate = useNavigate();
 
     const [clienteToDelete, setClienteToDelete] = useState<ClientesPresenter | null>(null);

@@ -4,9 +4,13 @@ import FuncionarioForm from "../../components/Forms/UsuarioForm/FuncionarioForm"
 import EmpresaGetById from "../../useCases/empresas/EmpresaGetById";
 import { tipoEmpresa } from "../../enum/TipoEmpresa";
 import { paths } from "../../paths";
+import { UseVerificaEmpresa } from "../../hooks/UseVerificaEmpresa";
 
 export default function FuncionariosCreatePage() {
     const { idEmpresa } = useParams<{ idEmpresa: string }>();
+    if (idEmpresa) {
+        UseVerificaEmpresa(idEmpresa);
+    }
     const [empresaTipo, setEmpresaTipo] = useState<tipoEmpresa | null>(null);
     const navigate = useNavigate();
 

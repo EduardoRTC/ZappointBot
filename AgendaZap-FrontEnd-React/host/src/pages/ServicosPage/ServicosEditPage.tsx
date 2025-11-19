@@ -8,7 +8,9 @@ import ServicoGetById from "../../useCases/servico/ServicoGetById";
 export default function ServicosEditPage() {
     const [servico, setServico] = useState<ServicosPresenter>();
     const { idEmpresa, id } = useParams<{ idEmpresa: string; id: string }>();
-
+    if (idEmpresa) {
+        UseVerificaEmpresa(idEmpresa);
+    }
     useEffect(() => {
         const fetchServico = async () => {
             try {

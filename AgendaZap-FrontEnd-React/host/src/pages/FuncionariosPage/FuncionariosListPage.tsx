@@ -14,9 +14,13 @@ import {
   Button,
 } from "@mui/material";
 import { toast } from "sonner";
+import { UseVerificaEmpresa } from "../../hooks/UseVerificaEmpresa";
 
 export default function FuncionariosListPage() {
   const { idEmpresa } = useParams<{ idEmpresa: string }>();
+  if (idEmpresa) {
+      UseVerificaEmpresa(idEmpresa);
+    }
   const [funcionarios, setFuncionarios] = useState<TFuncionario[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);

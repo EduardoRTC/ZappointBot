@@ -12,6 +12,9 @@ export default function ServicosListPage() {
     const [servicos, setServicos] = useState<ServicosPresenter[]>([]);
     const { idEmpresa } = useParams<{ idEmpresa: string }>();
     const navigate = useNavigate();
+    if (idEmpresa) {
+        UseVerificaEmpresa(idEmpresa);
+    }
 
     const [servicoToDelete, setServicoToDelete] = useState<ServicosPresenter | null>(null);
     const [openDialog, setOpenDialog] = useState(false);

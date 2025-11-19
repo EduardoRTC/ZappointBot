@@ -10,7 +10,6 @@ import { PiArrowBendDownLeftThin } from "react-icons/pi";
 
 const EsqueciSenhaPage = () => {
   const { idEmpresa } = useParams<{ idEmpresa: string }>();
-
   if (idEmpresa) {
     UseVerificaEmpresa(idEmpresa);
   }
