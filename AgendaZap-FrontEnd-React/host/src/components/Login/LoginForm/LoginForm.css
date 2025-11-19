@@ -17,7 +17,7 @@
     font-style: italic;
     color: #dddd;
     text-decoration: none;
-    width: 65%;
+    width: 80%;
     font-size: var(--14px);
 }
 
@@ -26,7 +26,7 @@
     color: #18244A;
     background-color: #fff;
     border-radius: 10px;
-    width: 25%;
+    width: 40%;
     height: 1.8rem ;
     margin-top: 15px;
     font-size: var(--16px);

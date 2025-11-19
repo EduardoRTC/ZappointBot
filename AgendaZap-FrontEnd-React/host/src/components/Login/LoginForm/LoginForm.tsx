@@ -12,7 +12,7 @@ import {
 } from "../../../schema/LoginUsuarioSchema";
 
 import "./LoginForm.css";
-import { TextField } from '@mui/material';
+import { Stack, TextField } from '@mui/material';
 
 export const LoginFormUsuario = ({ idEmpresa }: { idEmpresa: string | undefined }) => {
 
@@ -39,7 +39,6 @@ export const LoginFormUsuario = ({ idEmpresa }: { idEmpresa: string | undefined 
             if (response.status === 200) {
                 const body = await response.json();
 
-                // 🔥 Salvar token no localStorage
                 localStorage.setItem("accessToken", body.accessToken);
 
 
@@ -67,31 +66,84 @@ export const LoginFormUsuario = ({ idEmpresa }: { idEmpresa: string | undefined 
 
             <div className="login__form__logar">
 
-                <TextField
-                    label='Login'
-                    {...register("nomeUsuario")}
-                    error={!!errors.nomeUsuario}
-                    helperText={errors.nomeUsuario?.message}
-                    fullWidth
-                    size="small"
-                />
+                <Stack flexDirection='column' spacing={2}>
+                    <TextField
+                        label="Login"
+                        {...register("nomeUsuario")}
+                        error={!!errors.nomeUsuario}
+                        helperText={errors.nomeUsuario?.message}
+                        fullWidth
+                        size="small"
+                        sx={{
+                            "& .MuiInputBase-root": {
+                                backgroundColor: "#424D6F", // cor do background
+                                borderRadius: "10px",
+                                color: "#BCBCBC", // cor do texto digitado
+                            },
+                            "& .MuiInputLabel-root": {
+                                color: "#BCBCBC", // cor da label
+                            },
+                            "& .MuiInputLabel-root.Mui-focused": {
+                                color: "#BCBCBC", // cor da label focada
+                            },
+                            "& .MuiOutlinedInput-notchedOutline": {
+                                borderColor: "#7B8090", // borda padrão
+                            },
+                            "&:hover .MuiOutlinedInput-notchedOutline": {
+                                borderColor: "#BCBCBC", // borda ao passar o mouse
+                            },
+                            "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                                borderColor: "#BCBCBC", // borda focada
+                            },
+                            "& .MuiInputBase-input::placeholder": {
+                                color: "#BCBCBC",
+                                opacity: 1,
+                            },
+                        }}
+                    />
 
-                <TextField
-                    label='Senha'
-                    type="password"
-                    {...register("senha")}
-                    error={!!errors.senha}
-                    helperText={errors.senha?.message}
-                    fullWidth
-                    size="small"
-                />
-
-                <Link
-                    className="login__form__esqueci-senha"
-                    to={`/${idEmpresa}/esqueciSenhaConfirma`}
-                >
-                    Esqueci minha senha
-                </Link>
+                    <TextField
+                        label="Senha"
+                        type="password"
+                        {...register("senha")}
+                        error={!!errors.senha}
+                        helperText={errors.senha?.message}
+                        fullWidth
+                        size="small"
+                        sx={{
+                            "& .MuiInputBase-root": {
+                                backgroundColor: "#424D6F",
+                                borderRadius: "10px",
+                                color: "#BCBCBC",
+                            },
+                            "& .MuiInputLabel-root": {
+                                color: "#BCBCBC",
+                            },
+                            "& .MuiInputLabel-root.Mui-focused": {
+                                color: "#BCBCBC",
+                            },
+                            "& .MuiOutlinedInput-notchedOutline": {
+                                borderColor: "#7B8090",
+                            },
+                            "&:hover .MuiOutlinedInput-notchedOutline": {
+                                borderColor: "#BCBCBC",
+                            },
+                            "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                                borderColor: "#BCBCBC",
+                            },
+                            "& .MuiInputBase-input::placeholder": {
+                                color: "#BCBCBC",
+                                opacity: 1,
+                            },
+                        }}
+                    />
+                    <Link
+                        className="login__form__esqueci-senha"
+                        to={`/${idEmpresa}/esqueciSenhaConfirma`}
+                    >
+                        Esqueci minha senha
+                    </Link>
+                </Stack>
 
                 <button className="login__form__botao" type="submit">
                     Entrar
