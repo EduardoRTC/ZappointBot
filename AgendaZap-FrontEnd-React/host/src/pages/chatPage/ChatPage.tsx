@@ -51,6 +51,8 @@ const WS_ENDPOINT = "ws://localhost:8080"
 const STATUS_ENDPOINT = "http://localhost:3001/status"
 const QR_ENDPOINT = "http://localhost:3001/qr"
 const RESET_ENDPOINT = "http://localhost:3001/reset-session"
+const REMINDER_ENDPOINT = "http://localhost:3001/send-reminder"
+const APPOINTMENT_PREVIEW_ENDPOINT = "http://localhost:3001/appointment-active"
 
 const STORAGE_KEY_MESSAGES = "zappoint_chat_messages"
 const STORAGE_KEY_CONNECTION = "zappoint_connection_state"
@@ -104,7 +106,6 @@ class WebSocketManager {
           localStorage.setItem(STORAGE_KEY_CONNECTION, 'false')
         }
         
-        // Reconectar automaticamente após 3 segundos
         if (this.shouldReconnect) {
           this.reconnectTimeout = setTimeout(() => {
             console.log('[WS] Tentando reconectar...')
@@ -165,6 +166,13 @@ export default function ChatPage() {
   const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null)
+  
+  // Estados do lembrete
+  const [showReminderModal, setShowReminderModal] = useState(false)
+  const [reminderCpf, setReminderCpf] = useState('')
+  const [reminderLoading, setReminderLoading] = useState(false)
+  const [reminderResult, setReminderResult] = useState<{success: boolean, message: string} | null>(null)
+  const [appointmentPreview, setAppointmentPreview] = useState<any>(null)
 
   const wsManager = useRef(WebSocketManager.getInstance())
   const qrObjectUrlRef = useRef<string | null>(null)
@@ -366,7 +374,6 @@ export default function ChatPage() {
 
     checkAndConnect()
 
-    // Verificar conexão periodicamente
     const interval = setInterval(() => {
       setIsConnected(wsManager.current.isConnected())
     }, 1000)
@@ -387,7 +394,7 @@ export default function ChatPage() {
     }
   }, [isConnected, isAuthenticated, fetchQrImage])
 
-  // Limpar recursos ao desmontar (mas não desconectar WebSocket)
+  // Limpar recursos ao desmontar
   useEffect(() => {
     const mainElement = document.querySelector<HTMLElement>(".dashboard-layout__main")
     if (mainElement) {
@@ -437,7 +444,6 @@ export default function ChatPage() {
         type: "system",
       })
 
-      // Limpar localStorage
       if (typeof window !== 'undefined') {
         localStorage.removeItem(STORAGE_KEY_MESSAGES)
         localStorage.removeItem(STORAGE_KEY_AUTH)
@@ -463,6 +469,154 @@ export default function ChatPage() {
     }
     setQrImageUrl(null)
   }, [appendMessage])
+
+  // ======================= FUNÇÕES DE LEMBRETE =======================
+
+  const formatCPF = (value: string) => {
+    const numbers = value.replace(/\D/g, '')
+    if (numbers.length <= 11) {
+      return numbers
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+    }
+    return value
+  }
+
+  const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCPF(e.target.value)
+    setReminderCpf(formatted)
+    setReminderResult(null)
+    setAppointmentPreview(null)
+  }
+
+  const handlePreviewAppointment = async () => {
+    const cleanCPF = reminderCpf.replace(/\D/g, '')
+    
+    if (cleanCPF.length !== 11) {
+      setReminderResult({ 
+        success: false, 
+        message: 'Digite um CPF válido com 11 dígitos' 
+      })
+      return
+    }
+
+    try {
+      setReminderLoading(true)
+      setReminderResult(null)
+      setAppointmentPreview(null)
+
+      const response = await fetch(`${APPOINTMENT_PREVIEW_ENDPOINT}/${cleanCPF}`)
+      const data = await response.json()
+
+      if (!response.ok || !data.ok) {
+        setReminderResult({ 
+          success: false, 
+          message: data.error || 'Nenhum agendamento ativo encontrado' 
+        })
+        return
+      }
+
+      const app = data.appointment
+      const clientData = app.cliente || {}
+      const serviceData = app.servico || {}
+      const professionalData = app.usuario || {}
+      
+      const dateStr = app.dataHoraInicio || app.inicio
+      let formattedDate = ''
+      let formattedTime = ''
+
+      if (dateStr) {
+        const d = new Date(dateStr)
+        formattedDate = d.toLocaleDateString('pt-BR')
+        formattedTime = d.toLocaleTimeString('pt-BR', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        })
+      }
+
+      setAppointmentPreview({
+        clientName: clientData.nome || clientData.nomeInteiro || 'Cliente',
+        serviceName: serviceData.descricao || serviceData.nome || 'Serviço',
+        professionalName: professionalData.nomeInteiro || professionalData.nome || 'Profissional',
+        date: formattedDate,
+        time: formattedTime,
+        phone: clientData.telefone || 'Não informado'
+      })
+
+    } catch (error) {
+      console.error('Erro ao buscar agendamento:', error)
+      setReminderResult({ 
+        success: false, 
+        message: 'Erro ao conectar com o servidor' 
+      })
+    } finally {
+      setReminderLoading(false)
+    }
+  }
+
+  const handleSendReminder = async () => {
+    const cleanCPF = reminderCpf.replace(/\D/g, '')
+
+    if (cleanCPF.length !== 11) {
+      setReminderResult({ 
+        success: false, 
+        message: 'Digite um CPF válido com 11 dígitos' 
+      })
+      return
+    }
+
+    if (!isAuthenticated) {
+      setReminderResult({ 
+        success: false, 
+        message: 'WhatsApp não está autenticado. Escaneie o QR code primeiro.' 
+      })
+      return
+    }
+
+    try {
+      setReminderLoading(true)
+      setReminderResult(null)
+
+      const response = await fetch(REMINDER_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cpf: cleanCPF }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.ok) {
+        setReminderResult({
+          success: true,
+          message: '✅ Lembrete enviado com sucesso!'
+        })
+        
+        setTimeout(() => {
+          setShowReminderModal(false)
+          setReminderCpf('')
+          setAppointmentPreview(null)
+          setReminderResult(null)
+        }, 2000)
+      } else {
+        setReminderResult({
+          success: false,
+          message: data.error || 'Erro ao enviar lembrete'
+        })
+      }
+
+    } catch (error) {
+      console.error('Erro ao enviar lembrete:', error)
+      setReminderResult({
+        success: false,
+        message: 'Erro ao conectar com o servidor'
+      })
+    } finally {
+      setReminderLoading(false)
+    }
+  }
 
   const statusLabel = useMemo(() => {
     if (!isConnected) return "Desconectado"
@@ -494,6 +648,20 @@ export default function ChatPage() {
             disabled={isDisconnecting || !isConnected}
           >
             {isDisconnecting ? "Desconectando..." : "Desconectar / limpar sessão"}
+          </button>
+
+          {/* NOVO BOTÃO DE LEMBRETE */}
+          <button
+            type="button"
+            className="chat-button"
+            style={{ 
+              backgroundColor: isAuthenticated ? '#10b981' : '#6b7280',
+              marginTop: '10px'
+            }}
+            onClick={() => setShowReminderModal(true)}
+            disabled={!isAuthenticated}
+          >
+            📱 Enviar Lembrete
           </button>
 
           <span className={`chat-status chat-status--${isConnected ? "online" : "offline"}`}>
@@ -559,6 +727,178 @@ export default function ChatPage() {
           )}
         </div>
       </main>
+
+      {/* MODAL DE LEMBRETE */}
+      {showReminderModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflowY: 'auto'
+          }}>
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
+                📱 Enviar Lembrete de Agendamento
+              </h2>
+              <p style={{ color: '#666', fontSize: '14px' }}>
+                Digite o CPF do cliente para enviar um lembrete via WhatsApp
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '8px' }}>
+                CPF do Cliente
+              </label>
+              <input
+                type="text"
+                value={reminderCpf}
+                onChange={handleCPFChange}
+                placeholder="000.000.000-00"
+                maxLength={14}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '16px'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+              <button
+                onClick={handlePreviewAppointment}
+                disabled={reminderLoading || reminderCpf.replace(/\D/g, '').length !== 11}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  padding: '10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  opacity: (reminderLoading || reminderCpf.replace(/\D/g, '').length !== 11) ? 0.5 : 1
+                }}
+              >
+                {reminderLoading ? '🔄 Buscando...' : '🔍 Visualizar'}
+              </button>
+
+              <button
+                onClick={handleSendReminder}
+                disabled={reminderLoading || reminderCpf.replace(/\D/g, '').length !== 11}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  padding: '10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  opacity: (reminderLoading || reminderCpf.replace(/\D/g, '').length !== 11) ? 0.5 : 1
+                }}
+              >
+                {reminderLoading ? '📤 Enviando...' : '📤 Enviar'}
+              </button>
+            </div>
+
+            {appointmentPreview && (
+              <div style={{
+                padding: '16px',
+                backgroundColor: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '8px',
+                marginBottom: '16px'
+              }}>
+                <h3 style={{ fontWeight: '600', marginBottom: '12px' }}>
+                  📋 Agendamento Encontrado
+                </h3>
+                <div style={{ fontSize: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#666' }}>Cliente:</span>
+                    <span style={{ fontWeight: '500' }}>{appointmentPreview.clientName}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#666' }}>Serviço:</span>
+                    <span style={{ fontWeight: '500' }}>{appointmentPreview.serviceName}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#666' }}>Profissional:</span>
+                    <span style={{ fontWeight: '500' }}>{appointmentPreview.professionalName}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#666' }}>Data:</span>
+                    <span style={{ fontWeight: '500' }}>{appointmentPreview.date}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#666' }}>Horário:</span>
+                    <span style={{ fontWeight: '500' }}>{appointmentPreview.time}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {reminderResult && (
+              <div style={{
+                padding: '16px',
+                backgroundColor: reminderResult.success ? '#f0fdf4' : '#fef2f2',
+                border: `1px solid ${reminderResult.success ? '#bbf7d0' : '#fecaca'}`,
+                borderRadius: '8px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'start', gap: '12px' }}>
+                  <span style={{ fontSize: '24px' }}>
+                    {reminderResult.success ? '✅' : '❌'}
+                  </span>
+                  <p style={{
+                    flex: 1,
+                    fontWeight: '500',
+                    color: reminderResult.success ? '#166534' : '#991b1b'
+                  }}>
+                    {reminderResult.message}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                setShowReminderModal(false)
+                setReminderCpf('')
+                setAppointmentPreview(null)
+                setReminderResult(null)
+              }}
+              style={{
+                width: '100%',
+                padding: '10px',
+                backgroundColor: '#f3f4f6',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: '500',
+                cursor: 'pointer'
+              }}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

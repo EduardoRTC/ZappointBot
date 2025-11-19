@@ -24,10 +24,13 @@ const {
   professional,
   date,
   time,
-  confirmAppointment
+  confirmAppointment,
+  listAppointmentsByClientCPF
 } = require('./flows/conversation');
 
 const { startText } = require('./utils/messages');
+const axios = require('axios');
+const { apiBaseUrl, companyId } = require('./config');
 
 const client = new Client({ authStrategy: new LocalAuth() });
 
@@ -117,6 +120,7 @@ const app = express();
 
 // CORS liberado pra qualquer origem (dev)
 app.use(cors());
+app.use(express.json());
 
 // Endpoint para verificar status de autenticação
 app.get('/status', (req, res) => {
@@ -210,8 +214,348 @@ app.post('/reset-session', async (req, res) => {
   }
 });
 
+// ======================= ENDPOINT DE LEMBRETE =======================
+
+app.post('/send-reminder', async (req, res) => {
+  try {
+    console.log('[send-reminder] Requisição recebida:', req.body);
+
+    if (!isClientReady || !isAuthenticated) {
+      return res.status(503).json({
+        ok: false,
+        error: 'Bot não está conectado ao WhatsApp. Escaneie o QR code primeiro.'
+      });
+    }
+
+    const { cpf } = req.body;
+
+    if (!cpf) {
+      return res.status(400).json({
+        ok: false,
+        error: 'CPF é obrigatório'
+      });
+    }
+
+    console.log('[send-reminder] Buscando agendamentos para CPF:', cpf);
+    
+    let appointments;
+    try {
+      appointments = await listAppointmentsByClientCPF(cpf);
+    } catch (error) {
+      console.error('[send-reminder] Erro ao buscar agendamentos:', error);
+      return res.status(500).json({
+        ok: false,
+        error: 'Erro ao buscar agendamentos do cliente',
+        details: error.message
+      });
+    }
+
+    if (!appointments || appointments.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Nenhum agendamento encontrado para este CPF.'
+      });
+    }
+
+    console.log('[send-reminder] Total de agendamentos encontrados:', appointments.length);
+
+    const now = new Date();
+    const activeAppointments = appointments.filter(app => {
+      const statusRaw = app.statusAgendamento || app.status || app.Status;
+      
+      let statusNum = statusRaw;
+      if (typeof statusRaw === 'string') {
+        const statusStr = statusRaw.toLowerCase().trim();
+        if (statusStr === 'pendente') statusNum = 1;
+        else if (statusStr === 'finalizado') statusNum = 2;
+        else if (statusStr === 'cancelado') statusNum = 3;
+      }
+      
+      const isPending = Number(statusNum) === 1;
+      const dateStr = app.dataHoraInicio || app.inicio;
+      const isFuture = dateStr ? new Date(dateStr) > now : false;
+      
+      return isPending && isFuture;
+    });
+
+    if (activeAppointments.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Nenhum agendamento pendente e futuro encontrado para este CPF.'
+      });
+    }
+
+    console.log('[send-reminder] Agendamentos ativos:', activeAppointments.length);
+
+    activeAppointments.sort((a, b) => {
+      const dateA = new Date(a.dataHoraInicio || a.inicio || 0);
+      const dateB = new Date(b.dataHoraInicio || b.inicio || 0);
+      return dateA - dateB;
+    });
+
+    const appointment = activeAppointments[0];
+    console.log('[send-reminder] Agendamento selecionado:', appointment.id || appointment.idAgendamento);
+
+    // ==================== Extrai dados do cliente ====================
+    const clientData = appointment.cliente || {};
+    const clientName = clientData.nome || clientData.nomeInteiro || clientData.nomeCompleto || 'Cliente';
+    let clientPhone = clientData.telefone || appointment.telefone;
+
+    if (!clientPhone) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Telefone do cliente não encontrado no cadastro.'
+      });
+    }
+
+    clientPhone = String(clientPhone).replace(/\D/g, '');
+
+    let targetPhone = clientPhone;
+    if (!targetPhone.startsWith('55')) {
+      targetPhone = `55${targetPhone}`;
+    }
+    if (!targetPhone.includes('@')) {
+      targetPhone = `${targetPhone}@c.us`;
+    }
+
+    // ==================== Extrai nome do serviço de agendamentoServico ====================
+    let serviceName = 'Atendimento';
+    
+    if (appointment.agendamentoServico && Array.isArray(appointment.agendamentoServico) && appointment.agendamentoServico.length > 0) {
+      const firstService = appointment.agendamentoServico[0];
+      if (firstService.servico && firstService.servico.descricao) {
+        serviceName = firstService.servico.descricao;
+      }
+    }
+
+    console.log('[send-reminder] Serviço identificado:', serviceName);
+
+    // ==================== Busca dados do profissional via API ====================
+    const professionalId = appointment.idUsuario;
+    let professionalName = 'Nossa equipe';
+
+    if (professionalId) {
+      try {
+        console.log('[send-reminder] Buscando dados do profissional ID:', professionalId);
+        const professionalUrl = `${apiBaseUrl}/${companyId}/usuario/${professionalId}`;
+        const professionalResponse = await axios.get(professionalUrl);
+        const professionalData = professionalResponse.data;
+
+        if (professionalData && professionalData.nomeInteiro) {
+          professionalName = professionalData.nomeInteiro;
+          console.log('[send-reminder] Nome do profissional:', professionalName);
+        } else if (professionalData && professionalData.nomeUsuario) {
+          professionalName = professionalData.nomeUsuario;
+          console.log('[send-reminder] Nome do profissional (fallback):', professionalName);
+        }
+      } catch (professionalError) {
+        console.error('[send-reminder] Erro ao buscar profissional:', professionalError.message);
+        // Continua com o nome padrão se falhar
+      }
+    }
+
+    const dateStr = appointment.dataHoraInicio || appointment.inicio;
+    let formattedDate = '';
+    let formattedTime = '';
+
+    if (dateStr) {
+      try {
+        const d = new Date(dateStr);
+        formattedDate = d.toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+        formattedTime = d.toLocaleTimeString('pt-BR', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+      } catch (err) {
+        console.error('[send-reminder] Erro ao formatar data:', err);
+        formattedDate = 'Data não disponível';
+        formattedTime = 'Horário não disponível';
+      }
+    }
+
+    const message = 
+      `🔔 *Lembrete de Agendamento*\n\n` +
+      `Olá, *${clientName}*!\n\n` +
+      `📋 Não se esqueça do seu agendamento:\n\n` +
+      `*Serviço:* ${serviceName}\n` +
+      `*Profissional:* ${professionalName}\n` +
+      `*Data:* ${formattedDate}\n` +
+      `*Horário:* ${formattedTime}\n\n` +
+      `✨ Te esperamos!\n\n` +
+      `_Para cancelar ou reagendar, entre em contato conosco._`;
+
+    console.log('[send-reminder] Mensagem preparada para:', targetPhone);
+
+    try {
+      const numberId = await client.getNumberId(targetPhone);
+
+      if (!numberId) {
+        return res.status(404).json({
+          ok: false,
+          error: `Número ${targetPhone} não encontrado no WhatsApp.`
+        });
+      }
+
+      console.log('[send-reminder] Número verificado:', numberId._serialized);
+
+      await client.sendMessage(numberId._serialized, message);
+
+      console.log('[send-reminder] ✅ Mensagem enviada com sucesso!');
+
+      const historyPayload = {
+        type: 'bot_message',
+        sender: targetPhone.split('@')[0],
+        to: numberId._serialized,
+        body: message,
+        timestamp: new Date().toISOString()
+      };
+
+      addToHistory(historyPayload);
+      broadcastMessage(historyPayload);
+
+      return res.json({
+        ok: true,
+        message: 'Lembrete enviado com sucesso!',
+        sentTo: numberId._serialized,
+        appointment: {
+          id: appointment.id || appointment.idAgendamento,
+          clientName: clientName,
+          serviceName: serviceName,
+          professionalName: professionalName,
+          date: formattedDate,
+          time: formattedTime
+        }
+      });
+
+    } catch (sendError) {
+      console.error('[send-reminder] Erro ao enviar mensagem:', sendError);
+      return res.status(500).json({
+        ok: false,
+        error: 'Erro ao enviar mensagem via WhatsApp.',
+        details: sendError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('[send-reminder] ERRO GERAL:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Erro ao processar lembrete.',
+      details: error.message
+    });
+  }
+});
+
+// ======================= ENDPOINT PREVIEW =======================
+
+app.get('/appointment-active/:cpf', async (req, res) => {
+  try {
+    const { cpf } = req.params;
+
+    if (!cpf) {
+      return res.status(400).json({
+        ok: false,
+        error: 'CPF é obrigatório'
+      });
+    }
+
+    const appointments = await listAppointmentsByClientCPF(cpf);
+
+    if (!appointments || appointments.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Nenhum agendamento encontrado'
+      });
+    }
+
+    const now = new Date();
+    const active = appointments.filter(app => {
+      const statusRaw = app.statusAgendamento || app.status || app.Status;
+      let statusNum = statusRaw;
+      
+      if (typeof statusRaw === 'string') {
+        const statusStr = statusRaw.toLowerCase().trim();
+        if (statusStr === 'pendente') statusNum = 1;
+        else if (statusStr === 'finalizado') statusNum = 2;
+        else if (statusStr === 'cancelado') statusNum = 3;
+      }
+      
+      const isPending = Number(statusNum) === 1;
+      const dateStr = app.dataHoraInicio || app.inicio;
+      const isFuture = dateStr ? new Date(dateStr) > now : false;
+      
+      return isPending && isFuture;
+    });
+
+    if (active.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Nenhum agendamento ativo encontrado'
+      });
+    }
+
+    active.sort((a, b) => {
+      const dateA = new Date(a.dataHoraInicio || a.inicio || 0);
+      const dateB = new Date(b.dataHoraInicio || b.inicio || 0);
+      return dateA - dateB;
+    });
+
+    const previewAppointment = active[0];
+
+    // ==================== Extrai dados do serviço ====================
+    let serviceName = 'Atendimento';
+    if (previewAppointment.agendamentoServico && Array.isArray(previewAppointment.agendamentoServico) && previewAppointment.agendamentoServico.length > 0) {
+      const firstService = previewAppointment.agendamentoServico[0];
+      if (firstService.servico && firstService.servico.descricao) {
+        serviceName = firstService.servico.descricao;
+      }
+    }
+
+    // ==================== Busca dados do profissional ====================
+    let professionalName = 'Profissional';
+    const professionalId = previewAppointment.idUsuario;
+
+    if (professionalId) {
+      try {
+        const professionalUrl = `${apiBaseUrl}/${companyId}/usuario/${professionalId}`;
+        const professionalResponse = await axios.get(professionalUrl);
+        const professionalData = professionalResponse.data;
+
+        if (professionalData && professionalData.nomeInteiro) {
+          professionalName = professionalData.nomeInteiro;
+        } else if (professionalData && professionalData.nomeUsuario) {
+          professionalName = professionalData.nomeUsuario;
+        }
+      } catch (professionalError) {
+        console.error('[appointment-active] Erro ao buscar profissional:', professionalError.message);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      appointment: {
+        ...previewAppointment,
+        servico: { descricao: serviceName },
+        usuario: { nomeInteiro: professionalName }
+      }
+    });
+
+  } catch (error) {
+    console.error('[appointment-active] ERRO:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Erro ao buscar agendamento',
+      details: error.message
+    });
+  }
+});
+
 app.listen(3001, () => {
-  console.log('HTTP server rodando na porta 3001. Endpoint /status, /qr e /reset-session disponíveis.');
+  console.log('HTTP server rodando na porta 3001. Endpoints: /status, /qr, /reset-session, /send-reminder, /appointment-active disponíveis.');
 });
 
 // ======================= Eventos do WhatsApp =======================
