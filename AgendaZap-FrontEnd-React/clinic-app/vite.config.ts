@@ -4,7 +4,6 @@ import react from "@vitejs/plugin-react";
 import federation from "@originjs/vite-plugin-federation";
 
 // Só para documentação/clareza (não é usado diretamente)
-const DEV_HOSTS = ["http://localhost:3000", "http://127.0.0.1:3000", "http://zappoint:3000"];
 
 export default defineConfig({
   plugins: [

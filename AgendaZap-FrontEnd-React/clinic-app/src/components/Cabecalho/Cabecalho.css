@@ -5,6 +5,7 @@
     justify-content: flex-start;
     background-color: #0F1938;
     height: 100%;
+    padding: 10px;
     margin-bottom: 0;
 }
 
@@ -15,4 +16,36 @@
     color: white;
     display: flex;
     align-items: center;
+}
+
+.cabecalho__nome {
+    margin-left: auto;
+    color: #fff;
+    font-weight: bold;
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 600px) {
+
+    /* Alinha tudo para a direita */
+    .cabecalho {
+        justify-content: flex-end;
+    }
+
+    /* Esconde o nome da empresa */
+    .cabecalho__logo span,
+    .cabecalho__logo {
+        font-size: 0;
+        /* oculta o texto mas mantém o ícone */
+    }
+
+    /* Reexibe apenas o ícone da logo */
+    .cabecalho__logo svg {
+        font-size: 50px;
+    }
+
+    /* Esconde o nome do usuário também (se quiser mostrar, posso deixar) */
+    .cabecalho__nome {
+        display: none;
+    }
 }
